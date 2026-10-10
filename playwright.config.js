@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+const port = process.env.PLAYWRIGHT_PORT || '8000';
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
     testDir: './tests/browser',
     outputDir: './artifacts/browser-tests',
@@ -9,15 +12,15 @@ export default defineConfig({
     reporter: 'list',
     timeout: 30000,
     use: {
-        baseURL: 'http://127.0.0.1:8000',
+        baseURL,
         browserName: 'chromium',
         channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
         screenshot: 'only-on-failure',
         trace: 'retain-on-failure',
     },
     webServer: {
-        command: 'php artisan serve --host=127.0.0.1 --port=8000',
-        url: 'http://127.0.0.1:8000',
+        command: `php artisan serve --host=127.0.0.1 --port=${port}`,
+        url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 30000,
     },

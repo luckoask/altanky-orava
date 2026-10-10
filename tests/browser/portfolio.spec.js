@@ -241,7 +241,7 @@ test('desktop wheel input has a measurable smooth coast and still drives the mor
     await writeFile(testInfo.outputPath('wheel-motion.json'), JSON.stringify(samples));
 });
 
-test('desktop section links retain history and focus while keyboard scroll cancels inertia', async ({ page }) => {
+test('desktop section links retain history and focus while keyboard scroll cancels inertia', async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/');
@@ -253,7 +253,7 @@ test('desktop section links retain history and focus while keyboard scroll cance
     expect(destination.y).toBeGreaterThanOrEqual(85);
     expect(destination.y).toBeLessThanOrEqual(120);
     await page.goBack();
-    await expect(page).toHaveURL('http://127.0.0.1:8000/');
+    await expect(page).toHaveURL(`${baseURL}/`);
     await page.keyboard.press('End');
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight - scrollY)).toBeLessThanOrEqual(2);
     await page.mouse.move(800, 500);
@@ -576,11 +576,11 @@ for (const width of [390, 1440]) {
     });
 }
 
-test('content, native controls and photo links work without JavaScript', async ({ browser }) => {
+test('content, native controls and photo links work without JavaScript', async ({ browser, baseURL }) => {
     // Instant jumps: without page scripts Playwright cannot wait out a smooth scroll before a click.
     const context = await browser.newContext({ javaScriptEnabled: false, reducedMotion: 'reduce', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    await page.goto('http://127.0.0.1:8000/');
+    await page.goto(`${baseURL}/`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('[data-gallery-filters]')).not.toBeVisible();
     await expect(page.locator('[data-typewriter-line]')).toHaveText(['Zostaňte', 'do večera.']);

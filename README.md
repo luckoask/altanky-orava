@@ -4,7 +4,7 @@ Slovenská jednostránková prezentácia: hero, úvod, prehľad drevených stavi
 
 ## Spustenie
 
-Aktuálny `composer.lock` vyžaduje **PHP 8.4.1+**. Overené na PHP 8.5.5, Composer 2.9.5 a Node 22.19.0 / npm 10.9.3. Laravel 13, Tailwind CSS 4, Vite 7, vanilla JS a GSAP so ScrollTrigger; presné verzie sú v lock súboroch.
+Aktuálny `composer.lock` vyžaduje **PHP 8.4.1+**. Overené na PHP 8.5.5, Composer 2.9.5 a Node 22.19.0 / npm 10.9.3. Laravel 13, Tailwind CSS 4, Vite 8, vanilla JS a GSAP so ScrollTrigger; presné verzie sú v lock súboroch.
 
 ```powershell
 composer setup
@@ -87,6 +87,16 @@ Aktuálna galéria je viditeľne označená ako **inšpirácia z cudzích stavie
 5. Pri náhrade hero upravte `hero.image`, `alt`, `credit`, `source` a `is_reference`; `credit` a `source` sa nezobrazujú, sú záznamom pôvodu fotografie. Lokálne fonty a ich licencie sú oddelené od fotografií.
 
 Stránka pred potvrdením obsahu používa `noindex, nofollow`. Pri verejnom spustení nastavte skutočné `APP_URL`, `APP_ENV=production`, `APP_DEBUG=false`, doplňte SEO texty a až potom `PORTFOLIO_INDEXABLE=true`. Canonical sa zapne spolu s indexovaním. Webroot musí smerovať na `public`.
+
+## Nasadenie na server (domorava.sk)
+
+Produkčná stránka **https://domorava.sk** beží z tohto repozitára v `/var/www/altanky-orava` cez nginx (`/etc/nginx/conf.d/domorava.sk.conf`), PHP 8.5-FPM a certifikát Let's Encrypt s automatickou obnovou. Nová verzia sa nasadí na serveri príkazom:
+
+```bash
+./deploy.sh
+```
+
+Skript skontroluje čistý pracovný strom, spraví `git pull --ff-only`, nainštaluje produkčné Composer závislosti, spustí `npm ci` a Vite build, obnoví Laravel cache, nastaví práva pre `www-data` a overí `/` aj `/up`. Na serveri beží viac webov, preto skript nereloaduje nginx ani PHP-FPM. FPM má vypnuté `opcache.validate_timestamps`, a tak `scripts/opcache-invalidate.php` cez FastCGI zneplatní v zdieľanej OPcache iba súbory tohto projektu.
 
 ## Export pre FTP hosting
 
@@ -181,6 +191,8 @@ Pre reprodukovateľné kontroly prehliadača:
 npx playwright install chromium
 npm run test:browser
 ```
+
+Ak je port 8000 obsadený iným procesom, Playwright by testoval ten proces; iný port nastavte cez `PLAYWRIGHT_PORT`, napríklad `PLAYWRIGHT_PORT=18765 npm run test:browser`.
 
 Ak je nainštalovaný Chrome, sťahovanie Chromium možno vynechať:
 
