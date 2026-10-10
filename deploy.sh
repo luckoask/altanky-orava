@@ -11,10 +11,11 @@ APP_URL="https://domorava.sk"
 FPM_SOCKET="/run/php/php8.5-fpm.sock"
 WEB_USER="www-data"
 
-# Systémový Composer z apt hlási na PHP 8.5 deprecation notices z vlastného kódu;
-# deploy beží ako root, plugins projektu sa majú spustiť.
+# Systémový Composer z apt hlási na PHP 8.5 deprecation notices z vlastného kódu
+# (error_reporting si nastavuje sám), preto sa odfiltrujú iba tie riadky.
+# Deploy beží ako root a plugins projektu sa majú spustiť.
 export COMPOSER_ALLOW_SUPERUSER=1
-composer() { php -d error_reporting='E_ALL & ~E_DEPRECATED' "$(type -P composer)" "$@"; }
+composer() { command composer "$@" 2> >(grep -v '^Deprecation Notice: ' >&2); }
 
 cd "$APP_DIR"
 
