@@ -1,14 +1,9 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
-
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
 
 Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára} {--output= : Adresár s pripraveným build/manifest.json}', function () {
     $url = rtrim((string) $this->option('url'), '/');
@@ -31,7 +26,9 @@ Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára}
     foreach (['images', 'fonts', 'downloads'] as $directory) {
         File::copyDirectory($source.'/'.$directory, $output.'/'.$directory);
     }
-    File::copy($source.'/favicon.svg', $output.'/favicon.svg');
+    foreach (['favicon.svg', 'favicon.ico', 'apple-touch-icon.png'] as $file) {
+        File::copy($source.'/'.$file, $output.'/'.$file);
+    }
 
     // Only this CLI process changes its public path; the local app keeps its build.
     app()->usePublicPath($output);
@@ -41,6 +38,8 @@ Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára}
     Vite::useHotFile($output.'/hot');
 
     File::put($output.'/index.html', view('pages.home', ['content' => config('portfolio')])->render());
+    File::put($output.'/sitemap.xml', view('seo.sitemap', ['content' => config('portfolio')])->render());
+    File::put($output.'/robots.txt', view('seo.robots', ['content' => config('portfolio')])->render());
     File::put($output.'/.htaccess', "DirectoryIndex index.html\nOptions -Indexes\n");
 
     $this->info('Export pripravený: '.$output);

@@ -1,5 +1,29 @@
 # Overenie frontendu
 
+## Kôpka kariet v galérii a oprava farby hlavičky: 10. októbra 2026
+
+Galéria 04 je kôpka sticky kariet. Meranie v Chrome na 1440 × 900 a 390 × 844 px: karty sa ukladajú na 104, 118 a 132 px (mobil 78, 92, 106 px), karty pod kôpkou majú mierku 0,88, 0,93 a 0,98 a stmavenie do 0,62; na konci odchádza celá kôpka spolu, bez pretekania a chýb konzoly. Popis je hore na karte. Karta s fokusom vyskočí nad kôpku. Test morphingu výrezu galérie bol nahradený testom kôpky (sticky poloha, zmenšenie, stmavenie, dialóg klávesnicou); test bez JavaScriptu sa pred klikom vráti na začiatok galérie, lebo karty sa pri ďalšom scrolle zámerne prekrývajú.
+
+Farba hlavičky sa predtým zisťovala len pri udalosti scrollovania, takže po obnovení stránky alebo počas dobehu scrubovaných animácií mohla zostať nesprávna (zachytené: mobil, obnovenie pri 700 px, „Menu“ tmavé nad tmavou fotografiou). Teraz sa po každom podnete overuje 1,2 s každý snímok, poistne raz za 0,7 s a po spustení či prepočítaní animácií. Kontrola 32 polôh (scroll po krokoch a obnovenie stránky na 8 miestach, PC aj mobil) bola bez chyby. Prešli **9 PHP testov** a **27 z 28 testov v Chrome**; zlyhal iba test stiahnutia na `EPERM`.
+
+## Priehľadná hlavička a SEO: 10. októbra 2026
+
+Hlavička je bez pozadia a prepína farbu podľa podkladu; úvodná scéna na PC sa pripína od vrchu a fotografia sa rozvinie na celú obrazovku. Kontrola v Chrome na 1440 a 390 px: tmavé písmo nad svetlým úvodom, svetlé nad rozvinutou fotografiou, sekciou Materiály a mobilnou fotografiou, svetlé pozadie pri otvorenom menu, ostré logo nad blurom a žiadne pretekanie ani chyby konzoly. Test pripnutia teraz overuje scénu cez celý viewport a svetlé písmo hlavičky nad fotografiou.
+
+Päta: vodoznak bol zdvihnutý (spodný presah z 0,2 na 0,09 em, na telefóne nad okraj) a od 1440 px má päta 24 px navyše hore, aby sa písmeno „k“ pri 1920 px neorezalo. Navigácia v päte sú zaoblené tlačidlá a „Späť na začiatok“ okrúhle tlačidlo. Kontrola na 390, 768, 1024, 1440 a 1920 px bez pretekania, hover tlačidla v Chrome a blur hlavičky nad tmavou sekciou Kontakt. Prešli **9 PHP testov** a **27 z 28 testov v Chrome** (opäť len `EPERM` pri teste stiahnutia).
+
+Dorovnanie sekcie 03: na 1440 × 900 px kolieskom pri 80 % sekcie zhora aj zdola skončil vrch sekcie na 0 px, pri 60 % zostal na 360 px. Na 390 × 844 px s dotykom sa počas držania prsta nič nehlo; po pustení pri 78 % sekcia dosadla na 0 px, pri 55 % zostala. Prešli **9 PHP testov** a **28 z 28 testov v Chrome** vrátane testu stiahnutia podkladov.
+
+SEO: nový titulok (51 znakov), popis (145 znakov), H1 s kľúčovými slovami, schema.org graf, `sitemap.xml` s fotografiami, generovaný `robots.txt`, náhľad 1200 × 630, logo a ikona. Živá doména pri overení presmerovávala http aj www na https://domorava.sk (301), mala `noindex`, chýbala sitemap a firma nebola nájdená vo vyhľadávaní. Prešli **9 PHP testov so 182 assertions** (nový test štruktúrovaných dát, sitemap, robots a obrázkov), Pint, skúšobný export s `--url=https://domorava.sk` a **27 z 28 testov v Chrome**; zlyhal opäť iba test stiahnutia podkladov na `EPERM`.
+
+## Mobilné rozloženie a animácie: 10. októbra 2026
+
+Telefóny dostali nižšiu hlavičku, čitateľnejšie písmo (popisky 10 až 11 px, text 14 až 15 px), kompaktné karty služieb a krokov postupu, posúvateľné filtre a menší lightbox bez prázdnych pruhov. Pribudlo animované mobilné menu so stmavením stránky, plynulé rozbalenia v Materiáloch, službách a pri autoroch fotografií, swipe a prelínanie v galérii, animované otvorenie dialógu, nástup kariet po filtrovaní, fade pri odhaľovaní textov a odozva stlačenia na dotyku. Úvod hero beží v CSS od prvého vykreslenia. Desktopové rozloženie sa nemenilo; nebola pridaná závislosť.
+
+Prešli `npm run check`, produkčný build, **8 PHP testov so 158 assertions** a **27 z 28 testov v Chrome**. Testy FAQ používajú nové atribúty `data-disclosure-*` a pred meraním počkajú na dokončenie nástupu zoznamu. Neúspešný bol test stiahnutia podkladov: súbor sa stiahol bez chyby, ale Node ho v `artifacts` nemohol prečítať (`EPERM`); odkaz ani súbor sa nemenili. Cielená kontrola na 360 × 740 px s dotykom overila priebežné rozvinutie a zbalenie menu, skrytie a návrat hlavičky, 53 medzisnímok výšky pri rozbalení princípu, výlučnosť skupiny, swipe na ďalšiu fotografiu, zatvorenie dialógu, nulové pretekanie a žiadne chyby konzoly. Snímky mobilu na 360 a 390 px aj desktopu na 1440 px boli skontrolované vizuálne. Safari, Firefox a fyzické zariadenia neboli testované; v Safari bez podpory `overlay` sa dialóg zatvára bez animácie.
+
+Doplnené v ten istý deň: značka **DomOrava.sk** v logu, päte, titulku a `og:site_name`, hlavička ako roleta na počítači a vodoznak v päte. Kontrola v Chrome: pri koliesku na 1440 aj 900 px zostala hlavička počas pripnutej úvodnej scény viditeľná, pri scrollovaní nadol sa zasunula a pri posune nahor sa postupne vysunula (spodný okraj 2, 6, 9, 13… px po snímkach); na telefóne 390 px zostala na mieste. Vodoznak má na 390, 768, 1440 a 1920 px šírku 342 až 1540 px v rámci obsahu, písmená pri dosiahnutí päty postupne nadobudnú plnú opacitu a stránka nepreteká. Prešli **8 PHP testov so 158 assertions** a **27 z 28 testov v Chrome**; test stiahnutia podkladov opäť zlyhal iba na `EPERM` pri čítaní súboru.
+
 ## Fotografia cez celé pozadie sekcie 03: 5. októbra 2026
 
 Fotografia dreva je samostatná vrstva cez celú plochu sekcie Materiály. Nemá orezanie pôvodného rámu; nadpis, text a natívne rozbalenia sú nad tmavým prekrytím. Výška bloku sa prispôsobuje viewportu aj otvorenému obsahu. Responzívne varianty 1000, 1600 a 2200 px sa načítavajú lokálne cez existujúci `x-image`. Jemný parallax, natívne ovládanie a autor fotografie zostávajú dostupní. Nebola pridaná závislosť ani zmenený JavaScript.

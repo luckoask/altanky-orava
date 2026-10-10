@@ -120,9 +120,12 @@ test('desktop hero morphs, follows native scroll and reverts cleanly on mobile a
     expect(await photo.evaluate((element) => getComputedStyle(element).clipPath)).not.toBe(initial);
     await expect.poll(() => page.locator('[data-hero-caption]').evaluate((element) => Number(getComputedStyle(element).opacity))).toBeGreaterThan(0.9);
     expect(await actions.evaluate((element) => element.inert)).toBe(true);
+    // The scene fills the viewport under the transparent header, which switches to ivory ink over the photograph.
     const pin = await stage.boundingBox();
-    const header = await page.locator('.site-header').boundingBox();
-    expect(Math.abs(pin.y - header.height)).toBeLessThanOrEqual(2);
+    expect(Math.abs(pin.y)).toBeLessThanOrEqual(2);
+    expect(Math.abs(pin.height - 1000)).toBeLessThanOrEqual(2);
+    await expect(page.locator('.site-header .brand')).toHaveAttribute('data-on', 'dark');
+    expect((await page.locator('.site-header').boundingBox()).y).toBe(0);
     await page.screenshot({ path: testInfo.outputPath('hero-expanded.png') });
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -182,15 +185,17 @@ for (const width of [390, 1440]) {
     });
 }
 
-test('gallery masks morph as photographs enter the viewport and stay accessible', async ({ page }) => {
+test('gallery cards stack while scrolling and stay accessible', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/');
-    const mask = page.locator('.gallery-card [data-photo-morph]').first();
-    await expect(mask).toHaveCSS('clip-path', /inset/);
-    const initial = await mask.evaluate((element) => getComputedStyle(element).clipPath);
-    await page.locator('.gallery-image-link').first().evaluate((element) => window.scrollTo({ top: element.getBoundingClientRect().top + scrollY - 150, behavior: 'instant' }));
-    await expect.poll(() => mask.evaluate((element) => getComputedStyle(element).clipPath)).not.toBe(initial);
+    const first = page.locator('.gallery-card').first();
+    // The second card is on its way over the first one: the first rests at its sticky place, shrinks and dims.
+    await page.locator('.gallery-card').nth(1).evaluate((element) => window.scrollTo({ top: element.getBoundingClientRect().top + scrollY - 500, behavior: 'instant' }));
+    await expect.poll(() => first.locator('[data-stack-frame]').evaluate((frame) => Number(getComputedStyle(frame).scale))).toBeLessThan(1);
+    const position = await first.evaluate((element) => ({ top: element.getBoundingClientRect().top, rest: parseFloat(getComputedStyle(element).top) }));
+    expect(Math.abs(position.top - position.rest)).toBeLessThanOrEqual(1);
+    expect(await first.locator('.gallery-card-shade').evaluate((shade) => Number(getComputedStyle(shade).opacity))).toBeGreaterThan(0);
     const opener = page.locator('[data-gallery-open]').first();
     await opener.focus();
     await page.keyboard.press('Enter');
@@ -399,8 +404,11 @@ for (const width of [390, 1440]) {
         await page.evaluate(() => document.fonts.ready);
         const item = page.locator('.faq-item').first();
         const summary = item.locator('summary');
-        await expect(item).toHaveAttribute('data-faq-animated', '');
+        await expect(item).toHaveAttribute('data-disclosure-animated', '');
+        // Scroll motion is ready; let the entrance reveal of the list finish before recording.
+        await expect(page.locator('[data-parallax-layer]').first()).toHaveCSS('transform', /matrix/);
         await summary.scrollIntoViewIfNeeded();
+        await expect.poll(() => item.evaluate((element) => getComputedStyle(element).opacity === '1' && getComputedStyle(element).transform === 'none')).toBe(true);
         const collapsed = await item.evaluate((element) => element.getBoundingClientRect().height);
         async function record() {
             await page.evaluate(() => {
@@ -409,7 +417,7 @@ for (const width of [390, 1440]) {
                     const start = performance.now();
                     const frame = (time) => {
                         const element = document.querySelector('.faq-item');
-                        samples.push({ height: element.getBoundingClientRect().height, opacity: Number(getComputedStyle(element.querySelector('.faq-answer')).opacity), animating: element.hasAttribute('data-faq-animating') });
+                        samples.push({ height: element.getBoundingClientRect().height, opacity: Number(getComputedStyle(element.querySelector('.faq-answer')).opacity), animating: element.hasAttribute('data-disclosure-animating') });
                         if (time - start < 700) requestAnimationFrame(frame);
                         else resolve(samples);
                     };
@@ -421,7 +429,7 @@ for (const width of [390, 1440]) {
         await summary.click();
         const opening = await page.evaluate(() => window.__faqFrames);
         await expect(item).toHaveAttribute('open', '');
-        await expect(item).not.toHaveAttribute('data-faq-animating', '');
+        await expect(item).not.toHaveAttribute('data-disclosure-animating', '');
         const expanded = await item.evaluate((element) => element.getBoundingClientRect().height);
         expect(expanded).toBeGreaterThan(collapsed + 10);
         expect(opening.filter((sample) => sample.height > collapsed + 1 && sample.height < expanded - 1 && sample.opacity > 0 && sample.opacity < 1).length).toBeGreaterThan(2);
@@ -432,7 +440,7 @@ for (const width of [390, 1440]) {
         const closing = await page.evaluate(() => window.__faqFrames);
         expect(closing.filter((sample) => sample.height > collapsed + 1 && sample.height < expanded - 1 && sample.opacity > 0 && sample.opacity < 1).length).toBeGreaterThan(2);
         await expect(item).not.toHaveAttribute('open');
-        await expect(item).not.toHaveAttribute('data-faq-animating', '');
+        await expect(item).not.toHaveAttribute('data-disclosure-animating', '');
         expect(await item.evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(collapsed, 1);
         expect(await item.evaluate((element) => element.style.height)).toBe('');
         await writeFile(testInfo.outputPath('faq-motion.json'), JSON.stringify({ opening, closing }));
@@ -454,18 +462,18 @@ test('FAQ reverses repeated clicks and settles when resized or reduced motion ch
     await second.click();
     await expect(items.first()).not.toHaveAttribute('open');
     await expect(items.nth(1)).toHaveAttribute('open', '');
-    await expect(page.locator('.faq-item[data-faq-animating]')).toHaveCount(0);
+    await expect(page.locator('.faq-item[data-disclosure-animating]')).toHaveCount(0);
     await expect(page.locator('.faq-item[open]')).toHaveCount(1);
     await second.click();
     await page.waitForTimeout(80);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(items.nth(1)).not.toHaveAttribute('open');
-    await expect(page.locator('.faq-item[data-faq-animating]')).toHaveCount(0);
+    await expect(page.locator('.faq-item[data-disclosure-animating]')).toHaveCount(0);
     await second.click();
     await page.waitForTimeout(80);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await expect(items.nth(1)).toHaveAttribute('open', '');
-    await expect(page.locator('.faq-item[data-faq-animating]')).toHaveCount(0);
+    await expect(page.locator('.faq-item[data-disclosure-animating]')).toHaveCount(0);
     expect(await items.nth(1).evaluate((element) => element.getAnimations().length)).toBe(0);
     await first.focus();
     await page.keyboard.press('Enter');
@@ -483,7 +491,7 @@ test('FAQ remains a native exclusive disclosure when animation support is unavai
     await page.goto('/');
     const items = page.locator('.faq-item');
     await expect(items.first()).toHaveAttribute('name', 'faq');
-    await expect(items.first()).not.toHaveAttribute('data-faq-animated');
+    await expect(items.first()).not.toHaveAttribute('data-disclosure-animated');
     await items.first().locator('summary').focus();
     await page.keyboard.press('Enter');
     await expect(items.first().locator('.faq-answer')).toBeVisible();
@@ -544,6 +552,8 @@ test('content, native controls and photo links work without JavaScript', async (
     await menu.locator('summary').click();
     await page.locator('.faq-item').first().locator('summary').click();
     await expect(page.locator('.faq-answer').first()).toBeVisible();
+    // Cards overlap in a pile further down, so return to the start of the gallery as a visitor would.
+    await page.locator('#gallery-grid').evaluate((grid) => window.scrollTo(0, grid.getBoundingClientRect().top + scrollY - 120));
     await page.locator('[data-gallery-open]').first().click();
     await expect(page).toHaveURL(/\/images\/[^/]+\.webp$/);
     await context.close();

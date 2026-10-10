@@ -4,15 +4,14 @@
     <section class="hero" aria-labelledby="hero-title">
         <div class="hero-stage" data-hero-scene>
             <div class="hero-copy">
-                <x-section-label>{{ $content['hero']['eyebrow'] }}</x-section-label>
-                <x-motion-heading tag="h1" :lines="$content['hero']['heading']" id="hero-title" />
+                <x-motion-heading tag="h1" :eyebrow="$content['hero']['eyebrow']" :lines="$content['hero']['heading']" id="hero-title" />
                 <p class="hero-description">{{ $content['hero']['description'] }}</p>
                 <div class="hero-actions">
                     <x-button href="#inspiracia">Pozrieť fotografie</x-button>
                     <a class="hero-secondary" href="#moznosti">Možnosti <x-icon name="arrow-down" /></a>
                 </div>
             </div>
-            <figure class="hero-media" data-hero-media>
+            <figure class="hero-media" data-hero-media data-surface="dark">
                 <div class="parallax-layer" data-parallax-layer data-hero-image>
                     <x-image :image="$content['hero']['image']" :alt="$content['hero']['alt']" :priority="true" :variants="[640, 1000, 1600, 2200]" sizes="(min-width: 1024px) 100vw, 94vw" />
                 </div>
@@ -46,7 +45,7 @@
         @unless ($content['services_confirmed'])<p class="content-note">{{ $content['services_intro']['notice'] }}</p>@endunless
     </section>
 
-    <section class="craft-section" id="materialy" tabindex="-1" aria-labelledby="craft-title">
+    <section class="craft-section" id="materialy" tabindex="-1" aria-labelledby="craft-title" data-surface="dark" data-snap>
         <figure class="craft-figure">
             <div class="craft-image-wrap" data-parallax="0.06">
                 <div class="parallax-layer" data-parallax-layer>
@@ -103,7 +102,7 @@
         <div class="faq-list">@foreach ($content['faq'] as $item)<x-faq-item :question="$item['question']" :answer="$item['answer']" :index="$loop->index" />@endforeach</div>
     </section>
 
-    <section class="contact-section" id="kontakt" tabindex="-1" aria-labelledby="contact-title">
+    <section class="contact-section" id="kontakt" tabindex="-1" aria-labelledby="contact-title" data-surface="dark">
         <div class="container contact-grid">
             <div class="contact-copy"><x-section-label number="07">{{ $content['contact']['eyebrow'] }}</x-section-label><x-motion-heading :lines="$content['contact']['heading']" id="contact-title" /><p>{{ $content['contact']['description'] }}</p><x-button :href="asset($content['contact']['download'])" variant="light" icon="download" download="podklady-pre-drevenu-stavbu.txt">Stiahnuť podklady</x-button><span class="download-note">Textový súbor · bez registrácie</span></div>
             <div class="contact-aside">
@@ -136,7 +135,7 @@
     <dialog class="gallery-dialog" data-gallery-dialog aria-labelledby="lightbox-title" aria-describedby="lightbox-description">
         <div class="lightbox-topbar"><span data-lightbox-counter aria-live="polite"></span><button type="button" class="icon-button lightbox-close" data-lightbox-close aria-label="Zatvoriť fotografiu"><x-icon name="close" /></button></div>
         <div class="lightbox-image-stage"><button type="button" class="icon-button lightbox-previous" data-lightbox-previous aria-label="Predchádzajúca fotografia"><x-icon name="arrow-left" /></button><img data-lightbox-image src="{{ asset('images/'.$content['gallery']['items'][0]['image'].'-1600.webp') }}" alt="" width="1600" height="1067" loading="lazy"><button type="button" class="icon-button lightbox-next" data-lightbox-next aria-label="Nasledujúca fotografia"><x-icon name="arrow-right" /></button></div>
-        <div class="lightbox-caption"><div><p class="gallery-category" data-lightbox-category></p><h2 id="lightbox-title"></h2><p id="lightbox-description"></p></div><a href="{{ $content['gallery']['items'][0]['source'] }}" data-lightbox-credit target="_blank" rel="noopener noreferrer"><span data-lightbox-author></span><x-icon name="arrow-up-right" /><span class="sr-only">Zdroj fotografie (otvorí sa v novom okne)</span></a></div>
+        @php($firstPhoto = $content['gallery']['items'][0])<div class="lightbox-caption"><div><p class="gallery-category" data-lightbox-category>{{ $firstPhoto['label'] }} · {{ $firstPhoto['is_reference'] ? 'Realizácia' : 'Inšpirácia' }}</p><h2 id="lightbox-title">{{ $firstPhoto['title'] }}</h2><p id="lightbox-description">{{ $firstPhoto['description'] }}</p></div><a href="{{ $firstPhoto['source'] }}" data-lightbox-credit target="_blank" rel="noopener noreferrer"><span data-lightbox-author>Foto: {{ $firstPhoto['credit'] }}</span><x-icon name="arrow-up-right" /><span class="sr-only">Zdroj fotografie (otvorí sa v novom okne)</span></a></div>
     </dialog>
     <script type="application/json" id="gallery-data">{!! json_encode(collect($content['gallery']['items'])->map(fn ($item) => [...$item, 'src' => asset('images/'.$item['image'].'-1600.webp')])->values(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
 @endpush

@@ -8,6 +8,8 @@ class PortfolioTest extends TestCase
 {
     public function test_homepage_renders_slovak_metadata_and_all_sections(): void
     {
+        config(['portfolio.seo.indexable' => false]);
+
         $this->get('/')
             ->assertOk()
             ->assertSee('<html lang="sk">', false)
@@ -49,6 +51,8 @@ class PortfolioTest extends TestCase
             ->assertSee('href="mailto:kontakt@example.test"', false)
             ->assertSee('href="tel:+421900111222"', false)
             ->assertSeeText('Adresa pre test')
+            ->assertSee('"@type":"HomeAndConstructionBusiness"', false)
+            ->assertSee('"telephone":"+421 900 111 222"', false)
             ->assertDontSeeText('Kontaktné údaje pripravujeme');
     }
 
@@ -99,8 +103,40 @@ class PortfolioTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSee('name="robots" content="index, follow"', false)
+            ->assertSee('name="robots" content="index, follow, max-image-preview:large"', false)
             ->assertSee('rel="canonical"', false);
+    }
+
+    public function test_search_engines_receive_structured_data_sitemap_and_robots(): void
+    {
+        config(['portfolio.seo.indexable' => true]);
+
+        $html = $this->get('/')
+            ->assertOk()
+            ->assertSee('content="index, follow, max-image-preview:large"', false)
+            ->assertSee('property="og:image" content="'.asset('images/og-domorava.jpg').'"', false)
+            ->assertSee('name="twitter:card" content="summary_large_image"', false)
+            ->getContent();
+        $this->assertMatchesRegularExpression('/<h1[^>]*>\s*<span class="section-label motion-eyebrow">Drevené altánky, pergoly a prístrešky<\/span>/u', $html);
+
+        preg_match('/<script type="application\/ld\+json">(.*?)<\/script>/s', $html, $matches);
+        $this->assertArrayHasKey(1, $matches);
+        $graph = collect(json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR)['@graph'])->keyBy('@id');
+        $this->assertSame('WebSite', $graph[url('/').'#web']['@type']);
+        $this->assertSame('Organization', $graph[url('/').'#firma']['@type']);
+        $this->assertSame('DomOrava.sk', $graph[url('/').'#firma']['name']);
+        $this->assertSame(['WebPage', 'FAQPage'], $graph[url('/').'#stranka']['@type']);
+        $this->assertCount(count(config('portfolio.faq')), $graph[url('/').'#stranka']['mainEntity']);
+
+        $sitemap = $this->get('/sitemap.xml')->assertOk()->assertHeader('Content-Type', 'application/xml; charset=utf-8')->getContent();
+        $this->assertNotFalse(simplexml_load_string($sitemap));
+        $this->assertStringContainsString('<loc>'.url('/').'</loc>', $sitemap);
+        $this->assertStringContainsString('<image:loc>'.asset('images/evening-2200.webp').'</image:loc>', $sitemap);
+        $this->get('/robots.txt')->assertOk()->assertSee('Sitemap: '.url('/sitemap.xml'), false);
+
+        foreach (['images/og-domorava.jpg' => [1200, 630], 'images/logo-512.png' => [512, 512], 'apple-touch-icon.png' => [180, 180]] as $file => $size) {
+            $this->assertSame($size, array_slice(getimagesize(public_path($file)), 0, 2));
+        }
     }
 
     public function test_all_configured_image_variants_are_valid_local_webp_files(): void

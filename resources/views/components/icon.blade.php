@@ -10,6 +10,9 @@
         @case('arrow-down')
             <path d="M12 4v16m-6-6 6 6 6-6" />
             @break
+        @case('arrow-up')
+            <path d="M12 20V4m-6 6 6-6 6 6" />
+            @break
         @case('arrow-left')
             <path d="M20 12H4m6-6-6 6 6 6" />
             @break

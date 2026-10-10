@@ -3,7 +3,7 @@
 return [
     // Unknown business facts stay empty; the descriptor is not a company name.
     'business' => [
-        'name' => env('BUSINESS_NAME'),
+        'name' => env('BUSINESS_NAME') ?: 'DomOrava.sk',
         'descriptor' => 'Drevené stavby',
         'email' => env('BUSINESS_EMAIL'),
         'phone' => env('BUSINESS_PHONE'),
@@ -11,10 +11,14 @@ return [
         'area' => env('BUSINESS_AREA'),
     ],
 
+    // Keyword first, brand last; BUSINESS_AREA adds the served region once it is confirmed.
     'seo' => [
-        'title' => 'Drevené stavby: altánky, pergoly a prístrešky',
-        'description' => 'Prehľad altánkov, pergol a prístreškov. Fotografie na porovnanie, drevo a spoje zblízka, podklady na prípravu návrhu.',
-        'indexable' => (bool) env('PORTFOLIO_INDEXABLE', false),
+        'title' => 'Drevené altánky, pergoly a prístrešky'.(env('BUSINESS_AREA') ? ', '.env('BUSINESS_AREA') : '').' | DomOrava.sk',
+        'description' => 'Drevené altánky, pergoly a prístrešky do záhrady aj k domu. Inšpirácie, drevo a spoje zblízka a podklady na návrh stavby zdarma, bez registrácie.',
+        'indexable' => (bool) env('PORTFOLIO_INDEXABLE', true),
+        // 1200 × 630 preview for links shared on social networks and messengers.
+        'image' => ['path' => 'images/og-domorava.jpg', 'width' => 1200, 'height' => 630, 'alt' => 'DomOrava.sk: drevená pergola so sedením a večerným osvetlením.'],
+        'logo' => 'images/logo-512.png',
     ],
 
     'navigation' => [
@@ -24,16 +28,17 @@ return [
         ['label' => 'Ako začať', 'href' => '#postup'],
     ],
 
+    // surface: overall tone of the photograph, so the transparent header picks readable ink above it.
     'media' => [
-        'evening' => ['width' => 1600, 'height' => 1068, 'variants' => [640, 1000, 1600, 2200]],
+        'evening' => ['width' => 1600, 'height' => 1068, 'variants' => [640, 1000, 1600, 2200], 'surface' => 'dark'],
         'terrace' => ['width' => 1600, 'height' => 1067, 'variants' => [640, 1000, 1600]],
         'pavilion' => ['width' => 1600, 'height' => 2400, 'variants' => [640, 1000, 1600]],
         'garden' => ['width' => 1600, 'height' => 1067, 'variants' => [640, 1000, 1600]],
-        'timber' => ['width' => 2200, 'height' => 1467, 'variants' => [1000, 1600, 2200]],
+        'timber' => ['width' => 2200, 'height' => 1467, 'variants' => [1000, 1600, 2200], 'surface' => 'dark'],
     ],
 
     'hero' => [
-        'eyebrow' => 'Drevené stavby do záhrady',
+        'eyebrow' => 'Drevené altánky, pergoly a prístrešky',
         'heading' => ['Stôl v tieni.', 'Dlhý večer.'],
         'description' => 'Strecha nad sedením. Záhrada všade okolo.',
         'scene_heading' => ['Zostaňte', 'do večera.'],
@@ -151,6 +156,9 @@ return [
         ['question' => 'Čo si pripraviť na začiatok?', 'answer' => 'Fotografie miesta, približné rozmery a predstavu využitia. Pomôže aj informácia o podklade a orientačnom rozpočte.'],
         ['question' => 'Potrebuje drevo údržbu?', 'answer' => 'Áno. Kontrolujú sa nátery, spoje a miesta zadržiavajúce vodu. Obnova náteru závisí od expozície a pokynov výrobcu.'],
         ['question' => 'Ako sa určí cena a termín?', 'answer' => 'Podľa rozmerov, materiálu, strechy, podkladu a rozsahu prác. Obe treba potvrdiť pre konkrétne zadanie.'],
+        ['question' => 'Aký je rozdiel medzi altánkom, pergolou a prístreškom?', 'answer' => 'Altánok je samostatný priestor s pevnou strechou. Pergola je otvorený rám s priečnikmi pre svetlo a tieň; pred dažďom chráni až so zastrešením. Prístrešok kryje plochu pri dome alebo v záhrade, napríklad nad sedením alebo autom.'],
+        ['question' => 'Aké drevo sa hodí na altánok alebo pergolu?', 'answer' => 'Bežne sa používa smrek, borovica alebo smrekovec. Voľba závisí od zaťaženia, vystavenia vlhkosti a želanej údržby. Rovnako dôležitá je ochrana dreva, spoje a odvod vody.'],
+        ['question' => 'Treba na altánok alebo prístrešok povolenie?', 'answer' => 'Závisí od rozmerov, výšky, umiestnenia na pozemku a od toho, či stavba nadväzuje na dom. Pred návrhom to overte na stavebnom úrade svojej obce; podklady pomôžu stavbu presne opísať.'],
     ],
 
     'contact' => [
