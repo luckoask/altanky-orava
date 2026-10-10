@@ -1,5 +1,13 @@
 # Overenie frontendu
 
+## Safari, Firefox, produkčné spevnenie a právne stránky: 10. októbra 2026
+
+Celá sada prešla vo **Firefoxe 28/28**. Vo **WebKite** (jadro Safari) prešlo 24/28: kontrola obrázkov na 360 a 390 px čakala na lenivý obrázok v kôpke kariet, ktorý WebKit začne načítavať neskoro; galéria teraz načíta všetky fotografie kariet, keď je obrazovku od nej, a test potom prešiel na všetkých šírkach. Test FAQ prešiel pri samostatnom opakovaní 2/2 a test bez JavaScriptu pri opakovaní, išlo o výkyvy pri záťaži. Windows build WebKitu nevykresľuje `backdrop-filter` ani v jednoduchom príklade, preto blur pod hlavičkou treba overiť na skutočnom iPhone a Macu.
+
+Opravené chyby: panel mobilného menu a stmavenie mali po úprave blur iba šírku obsahu (teraz 0 až 390 px v Chrome aj WebKite) a na PC Lenis pri štarte prerušil skok na `/#kontakt` pri otvorení z inej stránky (teraz sekcia skončí 104 px pod vrchom, na mobile 84 px).
+
+Domovská stránka, právne stránky, sitemap, robots aj 404 nenastavujú cookies a posielajú verejnú cache s ETag, CSP a ďalšie bezpečnostné hlavičky. Prešlo **12 PHP testov s 228 assertions** (nové: hlavičky a cookies, právne stránky s chýbajúcimi aj doplnenými údajmi, 404), Pint, skúšobný export s právnymi stránkami a `404.html` a **29 z 30 testov v Chrome**; zlyhal len test stiahnutia na `EPERM`. Nové testy právnych stránok, rozloženia a kôpky prešli aj vo WebKite a Firefoxe. V konzole sa pri prechode stránkami neobjavilo porušenie CSP.
+
 ## Kôpka kariet v galérii a oprava farby hlavičky: 10. októbra 2026
 
 Galéria 04 je kôpka sticky kariet. Meranie v Chrome na 1440 × 900 a 390 × 844 px: karty sa ukladajú na 104, 118 a 132 px (mobil 78, 92, 106 px), karty pod kôpkou majú mierku 0,88, 0,93 a 0,98 a stmavenie do 0,62; na konci odchádza celá kôpka spolu, bez pretekania a chýb konzoly. Popis je hore na karte. Karta s fokusom vyskočí nad kôpku. Test morphingu výrezu galérie bol nahradený testom kôpky (sticky poloha, zmenšenie, stmavenie, dialóg klávesnicou); test bez JavaScriptu sa pred klikom vráti na začiatok galérie, lebo karty sa pri ďalšom scrolle zámerne prekrývajú.

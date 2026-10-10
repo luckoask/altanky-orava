@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@push('head')
+    @include('partials.structured-data')
+@endpush
+
 @section('content')
     <section class="hero" aria-labelledby="hero-title">
         <div class="hero-stage" data-hero-scene>

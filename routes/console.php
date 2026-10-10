@@ -40,7 +40,12 @@ Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára}
     File::put($output.'/index.html', view('pages.home', ['content' => config('portfolio')])->render());
     File::put($output.'/sitemap.xml', view('seo.sitemap', ['content' => config('portfolio')])->render());
     File::put($output.'/robots.txt', view('seo.robots', ['content' => config('portfolio')])->render());
-    File::put($output.'/.htaccess', "DirectoryIndex index.html\nOptions -Indexes\n");
+    foreach (['ochrana-osobnych-udajov' => 'pages.privacy', 'obchodne-podmienky' => 'pages.terms'] as $path => $page) {
+        File::ensureDirectoryExists($output.'/'.$path);
+        File::put($output.'/'.$path.'/index.html', view($page, ['content' => config('portfolio')])->render());
+    }
+    File::put($output.'/404.html', view('errors.404')->render());
+    File::put($output.'/.htaccess', "DirectoryIndex index.html\nOptions -Indexes\nErrorDocument 404 ".rtrim($parts['path'] ?? '', '/')."/404.html\n");
 
     $this->info('Export pripravený: '.$output);
     $this->line('Verejná URL: '.$url.'/');

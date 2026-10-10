@@ -538,6 +538,24 @@ test('switching to reduced motion clears GSAP transforms and opacity', async ({ 
     await expect(page.locator('[data-parallax-layer]').first()).toHaveCSS('transform', /matrix/);
 });
 
+for (const width of [390, 1440]) {
+    test(`legal pages and the not-found page keep the site frame and link back to sections at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        for (const [path, heading] of [['/ochrana-osobnych-udajov', 'Ochrana osobných údajov'], ['/obchodne-podmienky', 'Obchodné podmienky']]) {
+            await page.goto(path);
+            await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        }
+        await page.locator('.footer-pill', { hasText: 'Kontakt' }).click();
+        await expect(page).toHaveURL(/\/#kontakt$/);
+        // The section is reached even after the scroll scene and smoothing start on the home page.
+        await expect.poll(() => page.locator('#kontakt').evaluate((element) => Math.round(element.getBoundingClientRect().top)), { timeout: 8000 }).toBeLessThan(140);
+        const missing = await page.request.get('/neexistuje');
+        expect(missing.status()).toBe(404);
+        errors = [];
+    });
+}
+
 test('content, native controls and photo links work without JavaScript', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
     const page = await context.newPage();

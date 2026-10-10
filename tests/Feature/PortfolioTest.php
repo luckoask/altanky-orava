@@ -139,6 +139,56 @@ class PortfolioTest extends TestCase
         }
     }
 
+    public function test_pages_set_no_cookies_and_send_cache_and_security_headers(): void
+    {
+        foreach (['/', '/ochrana-osobnych-udajov', '/obchodne-podmienky', '/sitemap.xml'] as $path) {
+            $response = $this->get($path)->assertOk();
+            $this->assertSame([], $response->headers->getCookies(), $path);
+            $this->assertStringContainsString('public', $response->headers->get('Cache-Control'));
+            $this->assertNotEmpty($response->headers->get('ETag'));
+            $this->assertSame('SAMEORIGIN', $response->headers->get('X-Frame-Options'));
+            $this->assertStringContainsString("default-src 'self'", $response->headers->get('Content-Security-Policy'));
+        }
+    }
+
+    public function test_legal_pages_show_only_known_company_details_and_are_not_indexed(): void
+    {
+        $this->get('/ochrana-osobnych-udajov')
+            ->assertOk()
+            ->assertSee('name="robots" content="noindex, follow"', false)
+            ->assertSeeText('Ochrana osobných údajov')
+            ->assertSeeText('Úradu na ochranu osobných údajov')
+            ->assertSeeText('doplníme pred začatím poskytovania služieb')
+            ->assertDontSee('rel="canonical"', false);
+
+        config([
+            'portfolio.business.legal_name' => 'Testovacia firma s.r.o.',
+            'portfolio.business.ico' => '12345678',
+            'portfolio.business.address' => 'Hlavná 1, 026 01 Dolný Kubín',
+        ]);
+        $this->get('/obchodne-podmienky')
+            ->assertOk()
+            ->assertSeeText('Obchodné podmienky')
+            ->assertSeeText('Testovacia firma s.r.o.')
+            ->assertSeeText('12345678')
+            ->assertSeeText('Slovenská obchodná inšpekcia')
+            ->assertDontSeeText('doplníme pred začatím poskytovania služieb')
+            ->assertSee('href="'.url('/').'#kontakt"', false);
+        $this->get('/')->assertSeeText('Testovacia firma s.r.o. · IČO 12345678')
+            ->assertSee('href="'.route('privacy').'"', false)
+            ->assertSee('href="'.route('terms').'"', false);
+    }
+
+    public function test_unknown_addresses_use_the_branded_not_found_page(): void
+    {
+        $response = $this->get('/neexistuje')->assertNotFound()
+            ->assertSee('name="robots" content="noindex, follow"', false)
+            ->assertSeeText('Stránka sa nenašla')
+            ->assertSee('href="'.url('/').'"', false);
+        $this->assertSame([], $response->headers->getCookies());
+        $this->assertSame('SAMEORIGIN', $response->headers->get('X-Frame-Options'));
+    }
+
     public function test_all_configured_image_variants_are_valid_local_webp_files(): void
     {
         foreach (config('portfolio.media') as $name => $media) {

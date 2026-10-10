@@ -113,6 +113,22 @@ Texty opisujú sedenie, strechu, drevo a prípravu zadania. Úvodný pôdorysný
 - Náhľad na zdieľanie `public/images/og-domorava.jpg` (1200 × 630), logo pre vyhľadávače `public/images/logo-512.png` a ikona `public/apple-touch-icon.png` boli vykreslené z fontov, fotografie a značky webu.
 - FAQ má šesť otázok vrátane rozdielu medzi typmi stavieb, výberu dreva a povolenia. Google od mája 2026 nezobrazuje FAQ rozšírené výsledky; označenie zostáva pre ostatné vyhľadávače a AI odpovede.
 
+## Právne stránky, cookies a bezpečnosť
+
+- `/ochrana-osobnych-udajov` (GDPR) a `/obchodne-podmienky` (zmluva o dielo, platby, montáž, vady, odstúpenie, riešenie sporov) sú v `resources/views/pages/privacy.blade.php` a `terms.blade.php`. Majú `noindex, follow` a v päte sú na ne odkazy. Dátum účinnosti je `legal.updated` v `config/portfolio.php`. Texty sú vzor pre živnostníka alebo malú firmu; pred spustením ich má skontrolovať právnik.
+- Identifikácia firmy (`partials/company.blade.php` a päta) berie `BUSINESS_LEGAL_NAME`, `BUSINESS_ICO`, `BUSINESS_DIC`, `BUSINESS_IC_DPH`, `BUSINESS_REGISTRY`, `BUSINESS_ADDRESS`, e-mail a telefón z `.env`. Zobrazujú sa len vyplnené údaje; kým chýba obchodné meno, IČO alebo sídlo, právne stránky to otvorene uvádzajú.
+- Stránky nemajú session ani formulár, preto nenastavujú žiadne cookies (netreba cookie lištu) a posielajú `Cache-Control: public, max-age=60` s ETag.
+- `App\Http\Middleware\SecurityHeaders` pridáva ku každej odpovedi CSP (len vlastný pôvod a Cloudflare Web Analytics), `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj HSTS. Pri bežiacom Vite dev serveri sa CSP vynecháva.
+- Neexistujúce adresy majú vlastnú stránku 404 (`resources/views/errors/404.blade.php`); statický export ju zapisuje ako `404.html`.
+
+## Nasadenie do produkcie
+
+1. `.env` na serveri: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://domorava.sk`, `PORTFOLIO_INDEXABLE=true` a všetky `BUSINESS_*` údaje vrátane identifikácie firmy.
+2. `composer install --no-dev --optimize-autoloader`, `npm ci`, `npm run build`, `php artisan optimize`.
+3. Zmazať starý `public/robots.txt`, ak na serveri zostal; robots a sitemap sa generujú.
+4. Cloudflare: Always Use HTTPS, HSTS, pravidlo cache pre HTML (Cache Everything, rešpektovať hlavičky pôvodu) a po nasadení vyčistiť cache. Cloudflare Web Analytics funguje bez cookies a CSP ho povoľuje.
+5. Google Search Console: overiť doménu a odoslať `https://domorava.sk/sitemap.xml`.
+
 ## Kontroly
 
 ```powershell

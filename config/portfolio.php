@@ -9,7 +9,16 @@ return [
         'phone' => env('BUSINESS_PHONE'),
         'address' => env('BUSINESS_ADDRESS'),
         'area' => env('BUSINESS_AREA'),
+        // Legal identification shown in the footer and on the legal pages; empty values are left out.
+        'legal_name' => env('BUSINESS_LEGAL_NAME'),
+        'ico' => env('BUSINESS_ICO'),
+        'dic' => env('BUSINESS_DIC'),
+        'ic_dph' => env('BUSINESS_IC_DPH'),
+        'registry' => env('BUSINESS_REGISTRY'),
     ],
+
+    // Date from which the privacy policy and terms apply; change it whenever their text changes.
+    'legal' => ['updated' => '2026-10-10'],
 
     // Keyword first, brand last; BUSINESS_AREA adds the served region once it is confirmed.
     'seo' => [

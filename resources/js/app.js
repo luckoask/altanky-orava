@@ -3,6 +3,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const canAnimate = (element) => !reducedMotion.matches && typeof element?.animate === 'function';
 // The desktop Lenis instance while smoothing is active, so programmatic scrolls share its easing.
 let smoothScroller = null;
+// A page opened with #section is placed once; later smoothing restarts must not jump back there.
+let initialHashSettled = false;
 
 function initializeNavigation() {
     const menu = document.querySelector('[data-mobile-menu]');
@@ -143,6 +145,17 @@ function initializeGalleryStack() {
     })).filter((item) => item.frame && item.shade && item.photo);
     if (!cards.length) return;
     let queued = false;
+
+    // Cards slide in faster than a lazy image near the screen edge loads (Safari loads late), so the whole pile
+    // starts loading once the gallery is a screen away.
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            cards.forEach(({ photo }) => photo.querySelectorAll('img[loading="lazy"]').forEach((image) => { image.loading = 'eager'; }));
+            observer.disconnect();
+        }, { rootMargin: '100% 0px' });
+        observer.observe(cards[0].card.parentElement);
+    }
 
     function update() {
         queued = false;
@@ -536,6 +549,17 @@ function initializeSmoothScroll(gsap, ScrollTrigger) {
             prevent: (node) => node.tagName === 'DIALOG',
         });
         lenis.on('scroll', ScrollTrigger.update);
+        // Starting Lenis interrupts the browser's own jump to #section on load (e.g. /#kontakt from a legal page).
+        if (!initialHashSettled) {
+            initialHashSettled = true;
+            let target = null;
+            try {
+                target = location.hash.length > 1 ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+            } catch {
+                target = null;
+            }
+            if (target) lenis.scrollTo(target, { immediate: true, force: true });
+        }
         gsap.ticker.add(tick);
         ScrollTrigger.addEventListener('refresh', resize);
         document.addEventListener('click', anchor);
