@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { text } from 'node:stream/consumers';
 
 let errors;
 test.beforeEach(async ({ page }) => {
@@ -508,7 +509,8 @@ test('project brief downloads a real UTF-8 text file', async ({ page }) => {
     const download = await received;
     expect(download.suggestedFilename()).toBe('podklady-pre-drevenu-stavbu.txt');
     expect(await download.failure()).toBeNull();
-    expect(await readFile(await download.path(), 'utf8')).toContain('PODKLADY PRE DREVENÚ STAVBU');
+    const content = await text(await download.createReadStream());
+    expect(content).toContain('PODKLADY PRE DREVENÚ STAVBU');
 });
 
 test('reduced motion skips GSAP and disables smooth scrolling', async ({ page }) => {
