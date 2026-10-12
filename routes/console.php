@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 
@@ -30,6 +31,9 @@ Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára}
         File::copy($source.'/'.$file, $output.'/'.$file);
     }
 
+    // Static hosting cannot receive the inquiry form, so the export leaves it out.
+    config(['portfolio.inquiry.to' => null]);
+
     // Only this CLI process changes its public path; the local app keeps its build.
     app()->usePublicPath($output);
     URL::useOrigin($url);
@@ -52,3 +56,28 @@ Artisan::command('portfolio:export {--url= : Verejná URL vrátane podadresára}
 
     return 0;
 })->purpose('Exportovať Blade frontend a lokálne assety na statický FTP hosting');
+
+Artisan::command('portfolio:mail-test', function () {
+    $to = config('portfolio.inquiry.to');
+    $from = config('mail.from.address');
+
+    if (! $to || ! $from) {
+        $this->error('Doplňte INQUIRY_TO aj MAIL_FROM_ADDRESS. V produkcii musí byť nastavený skutočný MAIL_MAILER.');
+
+        return 1;
+    }
+
+    try {
+        Mail::raw('Skúšobná správa z webu. Ak ju čítate, dopyty z formulára budú chodiť sem.', function ($message) use ($to) {
+            $message->to($to)->subject('Skúška odosielania dopytov');
+        });
+    } catch (Throwable $exception) {
+        $this->error('Odoslanie zlyhalo: '.$exception->getMessage());
+
+        return 1;
+    }
+
+    $this->info('Skúšobný e-mail odišiel na '.$to.' cez '.config('mail.default').'.');
+
+    return 0;
+})->purpose('Poslať skúšobný e-mail na adresu pre dopyty');

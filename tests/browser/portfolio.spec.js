@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 
 let errors;
 test.beforeEach(async ({ page }) => {
@@ -557,7 +558,8 @@ for (const width of [390, 1440]) {
 }
 
 test('content, native controls and photo links work without JavaScript', async ({ browser }) => {
-    const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+    // Instant jumps: without page scripts Playwright cannot wait out a smooth scroll before a click.
+    const context = await browser.newContext({ javaScriptEnabled: false, reducedMotion: 'reduce', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     await page.goto('http://127.0.0.1:8000/');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -574,5 +576,95 @@ test('content, native controls and photo links work without JavaScript', async (
     await page.locator('#gallery-grid').evaluate((grid) => window.scrollTo(0, grid.getBoundingClientRect().top + scrollY - 120));
     await page.locator('[data-gallery-open]').first().click();
     await expect(page).toHaveURL(/\/images\/[^/]+\.webp$/);
+    await context.close();
+});
+
+// Repeated runs post from the same address; the local cache holds the form's hourly attempt limit.
+const resetInquiryLimit = () => execFileSync('php', ['artisan', 'cache:clear'], { stdio: 'ignore' });
+
+for (const width of [390, 1440]) {
+    test(`inquiry form checks fields, previews and shrinks photos and sends at ${width}px`, async ({ page }, testInfo) => {
+        resetInquiryLimit();
+        await page.setViewportSize({ width, height: 900 });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto('/#dopyt');
+        const form = page.locator('[data-inquiry-form]');
+        await expect(form).toHaveAttribute('data-enhanced', '');
+        const submit = form.getByRole('button', { name: 'Odoslať dopyt' });
+
+        await submit.click();
+        await expect(page.locator('#inquiry-name-error')).toHaveText('Napíšte, prosím, svoje meno.');
+        await expect(page.locator('#inquiry-contact-error')).toBeVisible();
+        await expect(page.locator('#inquiry-consent-error')).toBeVisible();
+        await expect(page.locator('#inquiry-name')).toBeFocused();
+        await expect(page.locator('#inquiry-phone')).toHaveAttribute('aria-invalid', 'true');
+
+        await page.locator('#inquiry-name').fill('Jana Testovacia');
+        await expect(page.locator('#inquiry-name-error')).toBeHidden();
+        await page.locator('#inquiry-email').fill('jana@example.test');
+        await expect(page.locator('#inquiry-contact-error')).toBeHidden();
+        await form.getByRole('radio', { name: 'Pergola' }).check();
+        await page.locator('#inquiry-size').fill('4 × 3 m');
+        await page.locator('#inquiry-place').fill('Tvrdošín');
+        await page.locator('[data-photo-input]').setInputFiles(['public/images/garden-1600.webp', 'public/images/terrace-640.webp']);
+        await expect(page.locator('[data-photo-list] li')).toHaveCount(2);
+        await expect(page.locator('[data-photo-list] img').first()).toHaveJSProperty('complete', true);
+        await page.getByRole('button', { name: 'Odstrániť fotku terrace-640.webp' }).click();
+        await expect(page.locator('[data-photo-list] li')).toHaveCount(1);
+        await form.locator('input[name="consent"]').check();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        await page.locator('#dopyt').screenshot({ path: testInfo.outputPath(`inquiry-filled-${width}.png`) });
+
+        // People take longer than the minimum fill time that marks a bot.
+        await page.waitForTimeout(3200);
+        const log = 'storage/logs/laravel.log';
+        const logBefore = await readFile(log, 'utf8').catch(() => '');
+        await submit.click();
+        const done = page.locator('[data-inquiry-done]');
+        await expect(done).toBeVisible();
+        await expect(done).toBeFocused();
+        await expect(form).toBeHidden();
+        const mail = (await readFile(log, 'utf8')).slice(logBefore.length);
+        expect(mail).toContain('dopyty@example.test');
+        expect(mail).toContain('jana@example.test');
+        // The WebP original arrives as a downscaled JPEG and the removed photo is not attached.
+        expect(mail).toContain('fotka-1.jpg');
+        expect(mail).not.toContain('fotka-2');
+        await page.locator('#dopyt').screenshot({ path: testInfo.outputPath(`inquiry-sent-${width}.png`) });
+    });
+}
+
+test('inquiry form keeps typed values and shows a server failure', async ({ page }) => {
+    await page.goto('/#dopyt');
+    await page.route('**/dopyt', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Dopyt sa nepodarilo odoslať. Skúste to o chvíľu znova.', errors: { form: ['Dopyt sa nepodarilo odoslať. Skúste to o chvíľu znova.'] } }) }));
+    await page.locator('#inquiry-name').fill('Jana Testovacia');
+    await page.locator('#inquiry-phone').fill('0900 123 456');
+    await page.locator('input[name="consent"]').check();
+    await page.getByRole('button', { name: 'Odoslať dopyt' }).click();
+    await expect(page.locator('[data-inquiry-alert]')).toHaveText('Dopyt sa nepodarilo odoslať. Skúste to o chvíľu znova.');
+    await expect(page.locator('[data-inquiry-form]')).toBeVisible();
+    await expect(page.locator('#inquiry-name')).toHaveValue('Jana Testovacia');
+    errors = errors.filter((error) => !error.includes('503'));
+});
+
+test('inquiry form works without JavaScript', async ({ browser }) => {
+    test.setTimeout(60000);
+    resetInquiryLimit();
+    // Instant jumps: without page scripts Playwright cannot wait out a smooth scroll to the form.
+    const context = await browser.newContext({ javaScriptEnabled: false, reducedMotion: 'reduce', viewport: { width: 390, height: 844 } });
+    const plain = await context.newPage();
+    await plain.goto('http://127.0.0.1:8000/#dopyt');
+    // The server answers missing contact details with the form again, keeping what was typed.
+    await plain.locator('#inquiry-name').fill('Peter Bez Skriptu');
+    await plain.locator('input[name="consent"]').check();
+    await plain.getByRole('button', { name: 'Odoslať dopyt' }).click();
+    await expect(plain.locator('#inquiry-contact-error')).toHaveText('Vyplňte telefón alebo e-mail, aby sme vám mohli odpovedať.');
+    await expect(plain.locator('#inquiry-name')).toHaveValue('Peter Bez Skriptu');
+    await expect(plain.locator('input[name="consent"]')).toBeChecked();
+    await plain.locator('#inquiry-phone').fill('0900 123 456');
+    await plain.getByRole('button', { name: 'Odoslať dopyt' }).click();
+    await expect(plain).toHaveURL(/\/dopyt-odoslany(#dopyt)?$/);
+    await expect(plain.getByRole('heading', { level: 1 })).toHaveText('Ďakujeme.');
+    expect(await context.cookies()).toEqual([]);
     await context.close();
 });

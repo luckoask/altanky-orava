@@ -43,6 +43,9 @@
         @case('mail')
             <rect x="3" y="5" width="18" height="14" rx="1" /><path d="m3 6 9 7 9-7" />
             @break
+        @case('camera')
+            <path d="M3 8h4l2-3h6l2 3h4v11H3z" /><circle cx="12" cy="13" r="3.5" />
+            @break
         @case('phone')
             <path d="m7 3 3 5-3 3a15 15 0 0 0 6 6l3-3 5 3-1 4C11 22 2 13 3 4z" />
             @break

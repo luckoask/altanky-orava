@@ -40,6 +40,8 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
+    {{-- Covers the first paint until app.js decides whether the 3D intro plays (CSS shows it only with JavaScript). --}}
+    <div class="curtain" aria-hidden="true"></div>
     <a class="skip-link" href="#obsah">Prejsť na obsah</a>
     <x-header :business="$content['business']" :navigation="$content['navigation']" :base="$anchorBase" />
     <main id="obsah" tabindex="-1">

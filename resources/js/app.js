@@ -499,6 +499,242 @@ function initializeGallery() {
     stage.addEventListener('pointercancel', endSwipe);
 }
 
+// Longest edge of a photo after downscaling in the browser; enough to judge a garden, small enough for e-mail.
+const PHOTO_EDGE = 2000;
+
+// Some browsers leave the type empty for formats their system does not know (WebKit on Windows with WebP).
+const isPhoto = (file) => file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif|avif)$/i.test(file.name));
+
+// Redraws a photo as a smaller JPEG, which also leaves out its camera metadata such as location. Formats the browser
+// cannot decode (HEIC outside Safari) and anything that fails are sent unchanged.
+async function shrinkPhoto(file, url) {
+    if (!isPhoto(file) || file.type === 'image/gif') return file;
+    try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const scale = Math.min(1, PHOTO_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(image.naturalWidth * scale);
+        canvas.height = Math.round(image.naturalHeight * scale);
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+        if (!blob) return file;
+        return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'fotka'}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+    } catch {
+        return file;
+    }
+}
+
+// Inquiry form: checks fields in place, previews and downscales photos and sends in the background with progress.
+// Without JavaScript the form posts normally and the server answers with the page or a thank-you page.
+function initializeInquiry() {
+    const form = document.querySelector('[data-inquiry-form]');
+    if (!form || typeof FormData !== 'function' || typeof XMLHttpRequest !== 'function') return;
+    const card = form.closest('.inquiry');
+    const done = card.querySelector('[data-inquiry-done]');
+    const alert = form.querySelector('[data-inquiry-alert]');
+    const status = form.querySelector('[data-inquiry-status]');
+    const submit = form.querySelector('[data-inquiry-submit]');
+    const label = submit.querySelector('[data-submit-label]');
+    const input = form.querySelector('[data-photo-input]');
+    const drop = form.querySelector('[data-photo-drop]');
+    const list = form.querySelector('[data-photo-list]');
+    const maxPhotos = Number(form.dataset.maxPhotos) || 6;
+    const maxPhotoBytes = (Number(form.dataset.maxPhotoKb) || 10240) * 1024;
+    const idleLabel = label.textContent;
+    const opened = performance.now();
+    let photos = [];
+    let sending = false;
+    // Photos are redrawn one at a time; several full camera images decoded at once can exhaust a phone's memory.
+    let shrinking = Promise.resolve();
+
+    form.noValidate = true;
+    form.dataset.enhanced = '';
+
+    const field = (name) => form.elements.namedItem(name);
+    const value = (name) => field(name)?.value.trim() ?? '';
+    // Inputs marked invalid by each error; the shared contact message belongs to both phone and e-mail.
+    const targets = (name) => (name === 'contact' ? [field('phone'), field('email')] : name === 'photos' ? [input] : [field(name)]).filter((element) => element instanceof Element);
+
+    function check() {
+        const errors = {};
+        if (!value('name')) errors.name = 'Napíšte, prosím, svoje meno.';
+        if (!value('phone') && !value('email')) errors.contact = 'Vyplňte telefón alebo e-mail, aby sme vám mohli odpovedať.';
+        if (value('phone') && !/^\+?[0-9 ()/.]{6,}$/.test(value('phone'))) errors.phone = 'Skontrolujte telefónne číslo.';
+        if (value('email') && !field('email').validity.valid) errors.email = 'Skontrolujte e-mailovú adresu.';
+        if (!field('consent').checked) errors.consent = 'Bez súhlasu nemôžeme dopyt spracovať.';
+        return errors;
+    }
+
+    function showErrors(errors) {
+        form.querySelectorAll('[data-error-for]').forEach((message) => {
+            const text = errors[message.dataset.errorFor] || null;
+            message.textContent = text ?? '';
+            message.hidden = !text;
+        });
+        form.querySelectorAll('[aria-invalid]').forEach((element) => element.removeAttribute('aria-invalid'));
+        Object.keys(errors).filter((name) => errors[name]).forEach((name) => targets(name).forEach((element) => element.setAttribute('aria-invalid', 'true')));
+    }
+
+    function showAlert(text) {
+        alert.textContent = text ?? '';
+        alert.hidden = !text;
+    }
+
+    const shownErrors = () => Object.fromEntries([...form.querySelectorAll('[data-error-for]:not([hidden])')].map((message) => [message.dataset.errorFor, message.textContent]));
+
+    // Editing a field clears its message; the next attempt checks everything again.
+    form.addEventListener('input', (event) => {
+        const name = event.target.name === 'photos[]' ? 'photos' : event.target.name;
+        if (!name) return;
+        const cleared = name === 'phone' || name === 'email' ? [name, 'contact'] : [name];
+        showErrors(Object.fromEntries(Object.entries(shownErrors()).filter(([key]) => !cleared.includes(key))));
+    });
+
+    function renderPhotos() {
+        list.replaceChildren(...photos.map((photo, index) => {
+            const item = document.createElement('li');
+            item.dataset.name = photo.file.name;
+            const image = document.createElement('img');
+            image.alt = '';
+            image.src = photo.url;
+            image.addEventListener('error', () => { item.dataset.unpreviewable = ''; });
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'photo-remove';
+            remove.setAttribute('aria-label', `Odstrániť fotku ${photo.file.name}`);
+            remove.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>';
+            remove.addEventListener('click', () => {
+                URL.revokeObjectURL(photo.url);
+                photos = photos.filter((item) => item !== photo);
+                renderPhotos();
+                (list.querySelectorAll('.photo-remove')[Math.min(index, photos.length - 1)] ?? input).focus();
+            });
+            item.append(image, remove);
+            return item;
+        }));
+        list.hidden = !photos.length;
+        drop.hidden = photos.length >= maxPhotos;
+    }
+
+    function addPhotos(files) {
+        const images = [...files].filter(isPhoto);
+        const free = maxPhotos - photos.length;
+        const notes = [];
+        if (images.length < files.length) notes.push('Pridať sa dajú iba fotky.');
+        if (images.length > free) notes.push(`Najviac ${maxPhotos} fotiek, ďalšie sme vynechali.`);
+        images.slice(0, Math.max(free, 0)).forEach((file) => {
+            const url = URL.createObjectURL(file);
+            shrinking = shrinking.then(() => shrinkPhoto(file, url));
+            photos.push({ file, url, ready: shrinking });
+        });
+        showErrors({ ...shownErrors(), photos: notes.join(' ') || undefined });
+        renderPhotos();
+    }
+
+    input.addEventListener('change', () => {
+        addPhotos(input.files);
+        input.value = '';
+    });
+    drop.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        drop.dataset.dragging = '';
+    });
+    drop.addEventListener('dragleave', () => delete drop.dataset.dragging);
+    drop.addEventListener('drop', (event) => {
+        event.preventDefault();
+        delete drop.dataset.dragging;
+        addPhotos(event.dataTransfer?.files ?? []);
+    });
+
+    function setBusy(busy, text = '') {
+        sending = busy;
+        submit.disabled = busy;
+        form.setAttribute('aria-busy', String(busy));
+        label.textContent = busy ? text : idleLabel;
+    }
+
+    function send(data) {
+        return new Promise((resolve) => {
+            const request = new XMLHttpRequest();
+            request.open('POST', form.action);
+            request.setRequestHeader('Accept', 'application/json');
+            request.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) label.textContent = `Odosielam ${Math.round((event.loaded / event.total) * 100)} %`;
+            });
+            request.addEventListener('load', () => {
+                let body = null;
+                try { body = JSON.parse(request.responseText); } catch { body = null; }
+                resolve({ status: request.status, body });
+            });
+            request.addEventListener('error', () => resolve({ status: 0, body: null }));
+            request.send(data);
+        });
+    }
+
+    function finish() {
+        photos.forEach((photo) => URL.revokeObjectURL(photo.url));
+        photos = [];
+        form.hidden = true;
+        card.querySelector('.inquiry-head').hidden = true;
+        done.hidden = false;
+        done.focus({ preventScroll: true });
+        if (canAnimate(done)) done.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 620, easing: EASE_OUT });
+        const top = card.getBoundingClientRect().top;
+        if (top < 0 || top > window.innerHeight * 0.6) card.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'start' });
+        document.dispatchEvent(new Event('portfolio:layout-change'));
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (sending) return;
+        const errors = check();
+        showErrors(errors);
+        showAlert(null);
+        if (Object.keys(errors).length) {
+            targets(Object.keys(errors)[0])[0]?.focus();
+            return;
+        }
+
+        setBusy(true, photos.length ? 'Pripravujem fotky' : 'Odosielam');
+        const files = await Promise.all(photos.map((photo) => photo.ready));
+        if (files.some((file) => file.size > maxPhotoBytes)) {
+            setBusy(false);
+            showErrors({ photos: `Niektorá fotka má viac ako ${Math.round(maxPhotoBytes / 1048576)} MB. Odstráňte ju alebo pošlite menšiu.` });
+            input.focus();
+            return;
+        }
+        const data = new FormData(form);
+        data.delete('photos[]');
+        files.forEach((file) => data.append('photos[]', file, file.name));
+        data.set('elapsed', String(Math.round(performance.now() - opened)));
+        status.textContent = 'Odosielam dopyt.';
+        const { status: code, body } = await send(data);
+        setBusy(false);
+        status.textContent = '';
+
+        if (code >= 200 && code < 300) {
+            finish();
+            return;
+        }
+        if (code === 422 && body?.errors) {
+            const messages = Object.fromEntries(Object.entries(body.errors).map(([name, list]) => [name, list[0]]));
+            const { form: general, ...fields } = messages;
+            showErrors(fields);
+            showAlert(general ?? 'Skontrolujte zvýraznené polia.');
+            targets(Object.keys(fields)[0] ?? '')[0]?.focus();
+            return;
+        }
+        showAlert(code === 413
+            ? 'Fotky sú spolu príliš veľké. Odstráňte niektoré a skúste to znova.'
+            : body?.message ?? 'Dopyt sa nepodarilo odoslať. Skontrolujte pripojenie a skúste to znova.');
+    });
+}
+
 function initializeSmoothScroll(gsap, ScrollTrigger) {
     let active = true;
     let lenis;
@@ -730,7 +966,7 @@ function animateButtons(gsap) {
 }
 
 // Supporting copy fades in after its heading; short lists arrive item by item.
-const REVEAL_TEXT = 'main .section-label:not(.hero .section-label), .section-description, .introduction .body-copy, .garden-plan figcaption, .craft-copy > p, .contact-copy > p, .download-note, .checklist-title, .contact-details, .gallery-toolbar, .content-note';
+const REVEAL_TEXT = 'main .section-label:not(.hero .section-label), .section-description, .introduction .body-copy, .garden-plan figcaption, .craft-copy > p, .contact-copy > p, .download-note, .checklist-title, .contact-details, .gallery-toolbar';
 const REVEAL_GROUPS = [['.faq-list', '.faq-item'], ['.craft-principles', '.craft-principle'], ['.contact-checklist', 'li']];
 
 async function initializeMotion() {
@@ -848,12 +1084,67 @@ async function initializeMotion() {
     }
 }
 
+// The 3D logo intro (resources/js/intro) plays on arrival and again after 30 minutes away,
+// as on lcks.eu. Never with reduced motion or when the link points at a section; ?intro=1
+// plays it any time. The time of the last visit is kept in localStorage, not in a cookie.
+// Three.js and the intro are downloaded only when it plays.
+function initializeIntro() {
+    const curtain = document.querySelector('.curtain');
+    const params = new URLSearchParams(window.location.search);
+    let last = 0;
+    try {
+        last = Number(window.localStorage.getItem('domorava-intro')) || 0;
+        window.localStorage.setItem('domorava-intro', String(Date.now()));
+    } catch {
+        // storage blocked: treat as a first visit
+    }
+    const recent = Date.now() - last < 30 * 60 * 1000;
+    const wanted = !reducedMotion.matches && (params.has('intro') || (!recent && window.location.hash.length <= 1));
+    if (!wanted) {
+        curtain?.remove();
+        return;
+    }
+
+    // The hero entrance (CSS animations) runs when the curtain opens, not behind it:
+    // `intro-hold` pauses it, the next frame rewinds whatever had already started.
+    const root = document.documentElement;
+    root.classList.add('intro-hold');
+    requestAnimationFrame(() => {
+        if (typeof document.getAnimations !== 'function') return;
+        document.getAnimations().forEach((animation) => {
+            if (animation.effect?.target?.closest?.('.hero')) animation.currentTime = 0;
+        });
+    });
+    // Wheel and touch must not move the page under the intro.
+    const block = (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    };
+    window.addEventListener('wheel', block, { capture: true, passive: false });
+    window.addEventListener('touchmove', block, { capture: true, passive: false });
+    let opened = false;
+    const open = () => {
+        if (opened) return;
+        opened = true;
+        window.removeEventListener('wheel', block, { capture: true });
+        window.removeEventListener('touchmove', block, { capture: true });
+        curtain?.remove();
+        root.classList.remove('intro-hold');
+    };
+    document.addEventListener('domorava:intro-reveal', open, { once: true });
+    import('./intro/domorava-intro.js')
+        .then(({ startIntro }) => startIntro({ skipLabel: 'Preskočiť' }))
+        .catch(open);
+}
+
+initializeIntro();
 initializeNavigation();
 initializeHeader();
 initializeSectionSnap();
 initializeDisclosures();
 initializeGallery();
 initializeGalleryStack();
+initializeInquiry();
 if ('requestIdleCallback' in window) {
     window.requestIdleCallback(initializeMotion, { timeout: 1500 });
 } else {

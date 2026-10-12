@@ -28,8 +28,9 @@ class PortfolioTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSeeText('Kontaktné údaje pripravujeme')
-            ->assertSeeText(config('portfolio.services_intro.notice'))
+            ->assertDontSeeText('pripravujeme')
+            ->assertDontSeeText('nie je potvrdená')
+            ->assertDontSee('class="contact-details"', false)
             ->assertSeeText(config('portfolio.gallery.notice'))
             ->assertDontSee('href="mailto:', false)
             ->assertDontSee('href="tel:', false)
@@ -53,7 +54,7 @@ class PortfolioTest extends TestCase
             ->assertSeeText('Adresa pre test')
             ->assertSee('"@type":"HomeAndConstructionBusiness"', false)
             ->assertSee('"telephone":"+421 900 111 222"', false)
-            ->assertDontSeeText('Kontaktné údaje pripravujeme');
+            ->assertSee('class="contact-details"', false);
     }
 
     public function test_configured_text_is_escaped_in_html_and_embedded_gallery_data(): void

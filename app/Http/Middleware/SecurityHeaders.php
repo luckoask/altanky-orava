@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * The policy allows only this origin, plus Cloudflare Web Analytics so it can be switched on without a code change.
  * Inline style attributes stay allowed for the per-word and per-card custom properties; JSON data blocks are not scripts.
+ * Images may also come from blob: URLs, which preview and downscale the photos chosen in the inquiry form.
  */
 class SecurityHeaders
 {
@@ -36,7 +37,7 @@ class SecurityHeaders
                 "default-src 'self'",
                 "script-src 'self' https://static.cloudflareinsights.com",
                 "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
+                "img-src 'self' data: blob:",
                 "font-src 'self'",
                 "connect-src 'self' https://cloudflareinsights.com",
                 "frame-ancestors 'self'",

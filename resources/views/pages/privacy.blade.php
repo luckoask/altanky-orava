@@ -27,10 +27,11 @@
             <section>
                 <h2>2. Aké údaje spracúvame</h2>
                 <ul>
-                    <li><strong>Údaje z dopytu:</strong> meno, e-mail alebo telefón, miesto stavby, rozmery, fotografie pozemku a ďalšie informácie, ktoré nám pošlete.</li>
+                    <li><strong>Údaje z dopytu:</strong> meno, e-mail alebo telefón, miesto stavby, rozmery, fotografie pozemku a ďalšie informácie, ktoré nám pošlete formulárom na webe, e-mailom alebo telefonicky.</li>
                     <li><strong>Údaje zo zmluvy:</strong> fakturačné údaje, adresa realizácie, vzájomná komunikácia a údaje o platbách.</li>
                     <li><strong>Technické údaje:</strong> pri návšteve webu poskytovateľ hostingu a Cloudflare krátkodobo spracúvajú IP adresu a technické údaje o požiadavke v serverových záznamoch, aby web zabezpečili a chránili.</li>
                 </ul>
+                <p>Formulár na webe pošle vyplnené údaje a fotografie e-mailom priamo nám. Web ich neukladá do databázy ani do súborov. Na ochranu formulára pred zneužitím si web najviac na jednu hodinu pamätá zakódovanú podobu IP adresy, z ktorej prišiel dopyt.</p>
             </section>
 
             <section>
@@ -50,6 +51,7 @@
                     <li>Dopyty, z ktorých nevznikne zmluva: najviac 12 mesiacov od poslednej komunikácie.</li>
                     <li>Zmluvy a súvisiaca komunikácia: počas trvania zmluvy a záručnej doby a potom počas premlčacích lehôt na uplatnenie nárokov.</li>
                     <li>Účtovné doklady: 10 rokov podľa zákona o účtovníctve.</li>
+                    <li>Zakódovaná IP adresa pri odoslaní formulára: najviac jednu hodinu.</li>
                     <li>Serverové záznamy: krátkodobo, podľa nastavení poskytovateľa hostingu.</li>
                 </ul>
             </section>
@@ -72,7 +74,7 @@
 
             <section>
                 <h2>7. Cookies a meranie návštevnosti</h2>
-                <p>Web sám nenastavuje cookies a nepoužíva nástroje na sledovanie návštevníkov. Písma a obrázky sa načítavajú z nášho servera. Cloudflare môže na ochranu pred škodlivou prevádzkou použiť nevyhnutný technický súbor cookie. Odkazy na zdroje fotografií vedú na cudzie weby, ktoré majú vlastné pravidlá.</p>
+                <p>Web sám nenastavuje cookies, ani pri odoslaní formulára, a nepoužíva nástroje na sledovanie návštevníkov. Písma a obrázky sa načítavajú z nášho servera. Cloudflare môže na ochranu pred škodlivou prevádzkou použiť nevyhnutný technický súbor cookie. Odkazy na zdroje fotografií vedú na cudzie weby, ktoré majú vlastné pravidlá.</p>
             </section>
 
             <section>

@@ -1,6 +1,6 @@
 # DomOrava.sk — frontend portfólia
 
-Slovenská jednostránková prezentácia: hero, úvod, prehľad drevených stavieb, materiály, filtrovaná galéria s prístupným dialógom, postup plánovania, FAQ, kontakt a päta. Laravel slúži na renderovanie Blade; stránka nemá API, formulár na odosielanie, autentifikáciu ani databázovú funkcionalitu.
+Slovenská jednostránková prezentácia: hero, úvod, prehľad drevených stavieb, materiály, filtrovaná galéria s prístupným dialógom, postup plánovania, FAQ, kontakt s formulárom na dopyty a päta. Laravel renderuje Blade a prijíma formulár, ktorý posiela dopyt e-mailom; stránka nemá autentifikáciu ani databázu.
 
 ## Spustenie
 
@@ -20,7 +20,7 @@ npm run build
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-Databázu ani migrácie netreba. Session a cache používajú lokálne súbory; worker sa nespúšťa. `public/build`, `vendor`, `node_modules`, `.env` a `artifacts` sú ignorované Gitom.
+Databázu ani migrácie netreba. Session sa nepoužíva, cache (limit pokusov formulára) používa lokálne súbory; worker sa nespúšťa. `public/build`, `vendor`, `node_modules`, `.env` a `artifacts` sú ignorované Gitom.
 
 ## Obsah a firemné údaje
 
@@ -43,17 +43,48 @@ Po zmene `.env` alebo konfigurácie:
 php artisan config:clear
 ```
 
-`services_confirmed` je zatiaľ `false`; sekcia predstavuje možnosti, nie potvrdený katalóg služieb. Pred jeho zmenou na `true` upravte položky podľa skutočnej ponuky. Nie sú doplnené ceny, záruky, referencie, roky skúseností ani recenzie.
+Položky v `services` upravte podľa skutočnej ponuky. Nie sú doplnené ceny, záruky, referencie, roky skúseností ani recenzie.
+
+## Formulár na dopyty
+
+Formulár je v sekcii Kontakt (`resources/views/components/inquiry-form.blade.php`, kotva `#dopyt`) a zobrazí sa, až keď je v `.env` vyplnené `INQUIRY_TO`. V produkcii (`APP_ENV=production`) sa nezobrazí ani vtedy, ak `MAIL_MAILER` zostal `log` alebo `array`; dopyty by sa inak stratili v logu, kým návštevník vidí poďakovanie. Texty, typy stavieb a limity sú v `inquiry` v `config/portfolio.php`.
+
+- **Polia:** meno, telefón alebo e-mail (stačí jedno), typ stavby (Altánok, Pergola, Prístrešok, Iné), približné rozmery, obec, správa, najviac 6 fotiek a povinný súhlas s odkazom na ochranu osobných údajov.
+- **Fotky:** prehliadač ich ukáže ako náhľady (dajú sa odobrať, na PC aj pretiahnuť) a pred odoslaním ich prekreslí na JPEG s dlhšou stranou najviac 2000 px. Tým odpadnú aj údaje z fotoaparátu vrátane polohy. Formát, ktorý prehliadač nevie otvoriť (HEIC mimo Safari), ide nezmenený. Server prijme JPG, PNG, WebP a HEIC, najviac 10 MB na fotku a 20 MB spolu.
+- **Odoslanie:** na pozadí s priebehom v tlačidle („Odosielam 45 %“). Chyby sa ukážu pri poliach a prvé chybné pole dostane fokus; po odoslaní karta ukáže poďakovanie. Bez JavaScriptu formulár odošle stránku: pri chybe ju server vykreslí znova s chybami a vyplnenými hodnotami (fotky treba vybrať znova), po odoslaní presmeruje na `/dopyt-odoslany` (`noindex`).
+- **E-mail:** `App\Mail\InquiryReceived` (HTML aj textová časť, `resources/views/mail`) ide na `INQUIRY_TO` s `Reply-To` na zákazníka, ak zadal e-mail. Fotky sú prílohy `fotka-1.jpg` atď. priamo z dočasného nahratia; web nič neukladá. Ak odoslanie zlyhá, chyba sa zapíše do logu a návštevník dostane výzvu skúsiť to znova s ponechanými údajmi.
+- **Ochrana bez cookies:** formulár nemá session, takže ani CSRF token. Namiesto neho server odmietne požiadavku s cudzím `Origin` (403), skryté pole `website` a odoslanie do 3 sekúnd od načítania prezradí robota (dostane bežnú odpoveď, ale nič sa nepošle) a z jednej IP adresy prejde najviac 10 pokusov za hodinu (v cache je len HMAC odtlačok adresy). Logika je v `App\Http\Controllers\InquiryController`.
+- **Cloudflare:** IP návštevníka a HTTPS sa berú z preposlaných hlavičiek iba od rozsahov Cloudflare (`trusted_proxies` v `config/app.php`, nastavené v `AppServiceProvider`). Inak by limit pokusov zdieľali všetci návštevníci jedného uzla Cloudflare. Iný proxy server: `TRUSTED_PROXIES` (IP oddelené čiarkou alebo `*`).
+- **CSP** povoľuje obrázky z `blob:` kvôli náhľadom a zmenšovaniu fotiek. Statický export formulár vynecháva, lebo FTP hosting ho nevie prijať.
+- **Rozloženie:** na telefóne je karta pod úvodom sekcie, na tablete pod úvodom a zoznamom, od 1024 px v pravom stĺpci vedľa nadpisu a zoznamu. Karta je pre hlavičku svetlý podklad (`data-surface="light"`). Nemá nábehovú animáciu: posun takej vysokej karty vo WebKite posunul aj stránku, keď bol návštevník na jej konci.
+
+Nastavenie odosielania v `.env` (príklady; odosielateľ musí byť na doméne overenej u poskytovateľa, inak maily padajú do spamu):
+
+```dotenv
+INQUIRY_TO=adresa@pre-dopyty.sk
+MAIL_FROM_ADDRESS=web@domorava.sk
+MAIL_FROM_NAME="DomOrava.sk"
+MAIL_MAILER=smtp
+# SMTP hostingu: údaje od hostingu, zvyčajne port 465 (MAIL_SCHEME=smtps) alebo 587
+# Brevo: MAIL_HOST=smtp-relay.brevo.com, MAIL_PORT=587, prihlasovacie meno a SMTP kľúč z účtu Brevo
+# Resend: MAIL_HOST=smtp.resend.com, MAIL_PORT=465, MAIL_SCHEME=smtps, MAIL_USERNAME=resend, MAIL_PASSWORD=API kľúč
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+```
+
+Po zmene spustite `php artisan config:clear` (v produkcii `php artisan optimize`) a `php artisan portfolio:mail-test`, ktorý pošle skúšobný e-mail na `INQUIRY_TO` a vypíše chybu, ak spojenie zlyhá. Server musí prijať nahraté fotky: v PHP `upload_max_filesize = 10M` a `post_max_size = 25M` alebo viac, pri nginx `client_max_body_size 25m`. Lokálne stačí `MAIL_MAILER=log`; dopyty sa potom zapíšu do `storage/logs/laravel.log`.
 
 ## Vlastné fotografie
 
-Aktuálna galéria je viditeľne označená ako **inšpirácia z cudzích stavieb**. Zdroj a licencia každej fotografie sú v [docs/ASSETS.md](docs/ASSETS.md); autorov možno otvoriť aj na stránke.
+Aktuálna galéria je viditeľne označená ako **inšpirácia z cudzích stavieb**. Zdroj a licencia každej fotografie sú v [docs/ASSETS.md](docs/ASSETS.md); autorov možno otvoriť aj na stránke. Úvodná fotografia a fotografia v sekcii Kontakt nemajú na sebe štítok „Inšpirácia · Foto“; je to ten istý záber ako prvá karta galérie, ktorej autor je v zozname Autori a licencie. Licencia Unsplash uvedenie autora nevyžaduje.
 
 1. Vlastné obrázky exportujte do `public/images` ako WebP s názvom `nazov-640.webp`, `nazov-1000.webp`, `nazov-1600.webp`. Pre hero pripravte aj `nazov-2200.webp`.
 2. Pridajte správne pôvodné rozmery a dostupné varianty do `media` v konfigurácii. Komponent obrázka z nich tvorí `srcset` a rezervuje rozmery.
 3. Upravte `gallery.items`: názov, kategóriu, opis, presný alt text, autora/zdroj a `image` bez prípony a veľkosti. `is_reference` nastavte na `true` len pri skutočnej firemnej realizácii s právami na zverejnenie.
 4. Upravte aj galériový nadpis a `notice`, aby presne popisovali aktuálny obsah. Inšpiráciu a firemné realizácie musia naďalej rozlišovať štítky.
-5. Pri náhrade hero upravte `hero.image`, `alt`, `credit`, `source` a `is_reference`. Lokálne fonty a ich licencie sú oddelené od fotografií.
+5. Pri náhrade hero upravte `hero.image`, `alt`, `credit`, `source` a `is_reference`; `credit` a `source` sa nezobrazujú, sú záznamom pôvodu fotografie. Lokálne fonty a ich licencie sú oddelené od fotografií.
 
 Stránka pred potvrdením obsahu používa `noindex, nofollow`. Pri verejnom spustení nastavte skutočné `APP_URL`, `APP_ENV=production`, `APP_DEBUG=false`, doplňte SEO texty a až potom `PORTFOLIO_INDEXABLE=true`. Canonical sa zapne spolu s indexovaním. Webroot musí smerovať na `public`.
 
@@ -66,16 +97,17 @@ npm run build -- --base=./ --outDir=artifacts/ftp-export/build
 php artisan portfolio:export --url=https://domorava.sk --output=artifacts/ftp-export
 ```
 
-Do cieľového FTP adresára patrí obsah `artifacts/ftp-export`: `index.html`, `.htaccess`, favicon a adresáre `build/assets`, `images`, `fonts`, `downloads`. `build/manifest.json` slúži iba pri exporte. Relatívny Vite base umožňuje načítať fonty a GSAP moduly aj z podadresára. Lokálny Laravel build zostáva samostatný v `public/build`.
+Export neobsahuje formulár na dopyty, lebo statický hosting ho nevie prijať. Do cieľového FTP adresára patrí obsah `artifacts/ftp-export`: `index.html`, `.htaccess`, favicon a adresáre `build/assets`, `images`, `fonts`, `downloads`. `build/manifest.json` slúži iba pri exporte. Relatívny Vite base umožňuje načítať fonty a GSAP moduly aj z podadresára. Lokálny Laravel build zostáva samostatný v `public/build`.
 
 Pred nahratím stiahnite existujúce cieľové súbory do zálohy, nahrajte assety a nakoniec `index.html`; po nahratí overte SHA-256 stiahnutím späť a skontrolujte verejnú URL. Prihlasovacie údaje patria do prostredia FTP klienta. Výsledok prvého nasadenia je v `docs/DEPLOYMENT.md`.
 
 ## Zdrojové súbory
 
 - `resources/views/pages/home.blade.php` a `layouts/app.blade.php`: skladanie stránky a metadáta.
+- `app/Http/Controllers/InquiryController.php`, `app/Mail/InquiryReceived.php`, `resources/views/components/inquiry-form.blade.php`, `resources/views/mail`, `pages/inquiry-sent.blade.php`: formulár na dopyty.
 - `resources/views/components`: navigácia, značka, tlačidlo, obrázok, služby, galéria, FAQ, päta a SVG ikony.
 - `resources/css/app.css`, `fonts.css`, `resources/fonts`: responzívny vizuálny systém a lokálne fonty.
-- `resources/js/app.js`: mobilné menu, filtre, dialóg, scrollové premeny fotografií, animácie nadpisov a parallax cez odložene načítaný GSAP.
+- `resources/js/app.js`: mobilné menu, filtre, dialóg, formulár (`initializeInquiry`, `shrinkPhoto`), scrollové premeny fotografií, animácie nadpisov a parallax cez odložene načítaný GSAP.
 - `public/images`, `public/downloads`: lokálne fotografie a reálny textový zoznam podkladov.
 
 Hlavička nemá pozadie ani okraj a leží nad stránkou (`position: fixed`, výška v `--header-h`). Logo, navigácia a akcie si samostatne zisťujú podklad pod sebou (`initializeHeader`, `elementsFromPoint`): nad svetlou plochou majú lesnú farbu, nad prvkami s `data-surface="dark"` slonovinovú. Takto sú označené úvodná fotografia, Materiály, Kontakt a tmavé fotografie galérie (`surface` v `media`). Pri scrollovaní sa pod hlavičkou objaví iba postupný blur bez farby, aby text stránky nekolidoval s logom a navigáciou; ak je pod hlavičkou len fotografia, zostáva úplne čistá.
@@ -117,14 +149,15 @@ Texty opisujú sedenie, strechu, drevo a prípravu zadania. Úvodný pôdorysný
 
 - `/ochrana-osobnych-udajov` (GDPR) a `/obchodne-podmienky` (zmluva o dielo, platby, montáž, vady, odstúpenie, riešenie sporov) sú v `resources/views/pages/privacy.blade.php` a `terms.blade.php`. Majú `noindex, follow` a v päte sú na ne odkazy. Dátum účinnosti je `legal.updated` v `config/portfolio.php`. Texty sú vzor pre živnostníka alebo malú firmu; pred spustením ich má skontrolovať právnik.
 - Identifikácia firmy (`partials/company.blade.php` a päta) berie `BUSINESS_LEGAL_NAME`, `BUSINESS_ICO`, `BUSINESS_DIC`, `BUSINESS_IC_DPH`, `BUSINESS_REGISTRY`, `BUSINESS_ADDRESS`, e-mail a telefón z `.env`. Zobrazujú sa len vyplnené údaje; kým chýba obchodné meno, IČO alebo sídlo, právne stránky to otvorene uvádzajú.
-- Stránky nemajú session ani formulár, preto nenastavujú žiadne cookies (netreba cookie lištu) a posielajú `Cache-Control: public, max-age=60` s ETag.
-- `App\Http\Middleware\SecurityHeaders` pridáva ku každej odpovedi CSP (len vlastný pôvod a Cloudflare Web Analytics), `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj HSTS. Pri bežiacom Vite dev serveri sa CSP vynecháva.
+- Stránky ani formulár nemajú session, preto nenastavujú žiadne cookies (netreba cookie lištu). Stránky posielajú `Cache-Control: public, max-age=60` s ETag, odpovede formulára `no-store`.
+- Ochrana osobných údajov opisuje formulár: údaje a fotky idú e-mailom a web ich neukladá, zakódovaná IP adresa sa drží najviac hodinu.
+- `App\Http\Middleware\SecurityHeaders` pridáva ku každej odpovedi CSP (len vlastný pôvod, Cloudflare Web Analytics a `blob:` obrázky pre náhľady fotiek), `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj HSTS. Pri bežiacom Vite dev serveri sa CSP vynecháva.
 - Neexistujúce adresy majú vlastnú stránku 404 (`resources/views/errors/404.blade.php`); statický export ju zapisuje ako `404.html`.
 
 ## Nasadenie do produkcie
 
-1. `.env` na serveri: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://domorava.sk`, `PORTFOLIO_INDEXABLE=true` a všetky `BUSINESS_*` údaje vrátane identifikácie firmy.
-2. `composer install --no-dev --optimize-autoloader`, `npm ci`, `npm run build`, `php artisan optimize`.
+1. `.env` na serveri: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://domorava.sk`, `PORTFOLIO_INDEXABLE=true`, všetky `BUSINESS_*` údaje vrátane identifikácie firmy a pre formulár `INQUIRY_TO` a `MAIL_*` (časť Formulár na dopyty).
+2. `composer install --no-dev --optimize-autoloader`, `npm ci`, `npm run build`, `php artisan optimize`, potom `php artisan portfolio:mail-test` a skúšobný dopyt z webu. Limity PHP a webového servera pre fotky podľa časti Formulár na dopyty.
 3. Zmazať starý `public/robots.txt`, ak na serveri zostal; robots a sitemap sa generujú.
 4. Cloudflare: Always Use HTTPS, HSTS, pravidlo cache pre HTML (Cache Everything, rešpektovať hlavičky pôvodu) a po nasadení vyčistiť cache. Cloudflare Web Analytics funguje bez cookies a CSP ho povoľuje.
 5. Google Search Console: overiť doménu a odoslať `https://domorava.sk/sitemap.xml`.
@@ -135,12 +168,12 @@ Texty opisujú sedenie, strechu, drevo a prípravu zadania. Úvodný pôdorysný
 npm run check
 npm run build
 php artisan test
-php vendor/bin/pint --test config/portfolio.php routes/web.php tests/Feature/PortfolioTest.php
+php vendor/bin/pint --test config/portfolio.php config/app.php routes/web.php routes/console.php app tests/Feature
 composer validate --strict --no-check-publish
 composer check-platform-reqs
 ```
 
-Testy PHP overujú vykreslenie, chýbajúce aj doplnené kontakty, escapovanie HTML/JSON, kotvy, stiahnuteľný súbor, metadáta, rozmery a prítomnosť WebP variantov. Spúšťajte ich po builde.
+Testy PHP overujú vykreslenie, chýbajúce aj doplnené kontakty, escapovanie HTML/JSON, kotvy, stiahnuteľný súbor, metadáta, rozmery a prítomnosť WebP variantov. Formulár (`tests/Feature/InquiryTest.php`): e-mail s prílohami a `Reply-To`, presmerovanie bez JS, chyby polí, limity fotiek, roboty, cudzí `Origin`, limit pokusov, výpadok pošty a skrytie v produkcii s `log`. Spúšťajte ich po builde.
 
 Pre reprodukovateľné kontroly prehliadača:
 
@@ -156,6 +189,6 @@ $env:PLAYWRIGHT_CHANNEL = 'chrome'
 npm run test:browser
 ```
 
-Playwright kontroluje šírky 360, 390, 768, 1024, 1440 a 1920 px, pretekanie, obrázky, chyby konzoly, skutočný parallax a morphing pri scrollovaní, odstránenie pripnutia pri zmene šírky alebo preferencie pohybu, menu, filtrovanie, klávesnicu, návrat fokusu, FAQ, stiahnutie podkladov a režim bez JS. Ukladá náhľady do `artifacts/browser-tests`. Prehliadač je oddelený od runtime závislostí stránky.
+Playwright kontroluje šírky 360, 390, 768, 1024, 1440 a 1920 px, pretekanie, obrázky, chyby konzoly, skutočný parallax a morphing pri scrollovaní, odstránenie pripnutia pri zmene šírky alebo preferencie pohybu, menu, filtrovanie, klávesnicu, návrat fokusu, FAQ, stiahnutie podkladov, formulár (chyby, náhľady, zmenšenie fotky, odoslanie cez `log` mailer, výpadok servera) a režim bez JS. Testy formulára potrebujú v lokálnom `.env` vyplnené `INQUIRY_TO` a `MAIL_FROM_ADDRESS` a pred odoslaním vyčistia lokálnu cache (`php artisan cache:clear`), aby ich pri opakovaní nezastavil limit 10 pokusov za hodinu. Ukladá náhľady do `artifacts/browser-tests`. Prehliadač je oddelený od runtime závislostí stránky.
 
 Aktuálny rozsah overenia a obmedzenia sú v [docs/VERIFICATION.md](docs/VERIFICATION.md).

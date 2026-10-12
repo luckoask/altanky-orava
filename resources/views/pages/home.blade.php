@@ -25,7 +25,6 @@
                     @foreach ($content['hero']['scene_heading'] as $line)<span data-typewriter-line aria-hidden="true">{{ $line }}</span>@endforeach
                 </figcaption>
             </figure>
-            <a class="hero-credit" href="{{ $content['hero']['source'] }}" target="_blank" rel="noopener noreferrer">{{ $content['hero']['is_reference'] ? 'Realizácia' : 'Inšpirácia' }} · Foto: {{ $content['hero']['credit'] }} <x-icon name="arrow-up-right" /><span class="sr-only">(otvorí sa v novom okne)</span></a>
             <div class="hero-scroll" aria-hidden="true"><span>Nižšie sú detaily</span><x-icon name="arrow-down" /></div>
             <div class="scene-progress" aria-hidden="true"><span data-scene-progress></span></div>
         </div>
@@ -46,7 +45,6 @@
             <p class="section-description">{{ $content['services_intro']['description'] }}</p>
         </div>
         <div class="services-grid">@foreach ($content['services'] as $service)<x-service-card :service="$service" />@endforeach</div>
-        @unless ($content['services_confirmed'])<p class="content-note">{{ $content['services_intro']['notice'] }}</p>@endunless
     </section>
 
     <section class="craft-section" id="materialy" tabindex="-1" aria-labelledby="craft-title" data-surface="dark" data-snap>
@@ -107,21 +105,22 @@
     </section>
 
     <section class="contact-section" id="kontakt" tabindex="-1" aria-labelledby="contact-title" data-surface="dark">
-        <div class="container contact-grid">
+        <div @class(['container', 'contact-grid', 'contact-grid--form' => $content['inquiry']['to']])>
             <div class="contact-copy"><x-section-label number="07">{{ $content['contact']['eyebrow'] }}</x-section-label><x-motion-heading :lines="$content['contact']['heading']" id="contact-title" /><p>{{ $content['contact']['description'] }}</p><x-button :href="asset($content['contact']['download'])" variant="light" icon="download" download="podklady-pre-drevenu-stavbu.txt">Stiahnuť podklady</x-button><span class="download-note">Textový súbor · bez registrácie</span></div>
+            @if ($content['inquiry']['to'])
+                <x-inquiry-form :settings="$content['inquiry']" :state="$inquiry ?? []" />
+            @endif
             <div class="contact-aside">
                 <p class="checklist-title">Na začiatok stačí</p>
                 <ul class="contact-checklist">@foreach ($content['contact']['checklist'] as $item)<li><x-icon name="check" /><span>{{ $item }}</span></li>@endforeach</ul>
-                <div class="contact-details">
-                    @if ($content['business']['email'] || $content['business']['phone'])
+                @if ($content['business']['email'] || $content['business']['phone'])
+                    <div class="contact-details">
                         @if ($content['business']['email'])<a href="mailto:{{ $content['business']['email'] }}"><x-icon name="mail" /><span>{{ $content['business']['email'] }}</span><x-icon name="arrow-up-right" /></a>@endif
                         @if ($content['business']['phone'])<a href="tel:{{ preg_replace('/[^+0-9]/', '', $content['business']['phone']) }}"><x-icon name="phone" /><span>{{ $content['business']['phone'] }}</span><x-icon name="arrow-up-right" /></a>@endif
                         @if ($content['business']['address'])<p>{{ $content['business']['address'] }}</p>@endif
                         @if ($content['business']['area'])<p>{{ $content['business']['area'] }}</p>@endif
-                    @else
-                        <p class="contact-pending-title">{{ $content['contact']['pending_title'] }}</p><p class="contact-pending-description">{{ $content['contact']['pending_description'] }}</p>
-                    @endif
-                </div>
+                    </div>
+                @endif
             </div>
             <figure class="contact-figure">
                 <div class="contact-image-wrap" data-parallax="0.08">
@@ -129,7 +128,6 @@
                         <x-image :image="$content['contact']['image']" :alt="$content['contact']['alt']" sizes="(min-width: 1732px) 1560px, 92vw" />
                     </div>
                 </div>
-                <figcaption><span>Inšpirácia</span><a href="{{ $content['contact']['source'] }}" target="_blank" rel="noopener noreferrer">Foto: {{ $content['contact']['credit'] }} <x-icon name="arrow-up-right" /><span class="sr-only">(otvorí sa v novom okne)</span></a></figcaption>
             </figure>
         </div>
     </section>

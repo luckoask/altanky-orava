@@ -54,6 +54,7 @@ return [
         'image' => 'evening',
         'alt' => 'Drevená pergola so sedením a večerným osvetlením. Inšpiračná fotografia.',
         'caption' => 'Sedenie pod drevenou pergolou.',
+        // Not shown on the photo; credit and source record its origin (the same photo is credited in the gallery).
         'is_reference' => false,
         'credit' => 'Randy Fath / Unsplash',
         'source' => 'https://unsplash.com/photos/photo-of-gazebo-with-curtain-and-string-lights-csK5XPO87lI',
@@ -65,13 +66,10 @@ return [
         'description' => 'Počítajte aj s odsunutou stoličkou a voľným priechodom okolo stola.',
     ],
 
-    // These are informative content candidates, not a verified service catalogue.
-    'services_confirmed' => false,
     'services_intro' => [
         'eyebrow' => 'Altánok, pergola alebo prístrešok',
         'heading' => ['Tri typy.', 'Podľa miesta.'],
         'description' => 'Samostatne v záhrade alebo hneď pri dome.',
-        'notice' => 'Prehľad typov stavieb. Konkrétna ponuka zatiaľ nie je potvrdená.',
     ],
     'services' => [
         [
@@ -176,11 +174,26 @@ return [
         'description' => 'Rozmery, podklad a to, na čo chcete stavbu používať.',
         'image' => 'evening',
         'alt' => 'Večerné sedenie pod drevenou pergolou so závesmi a teplým osvetlením. Inšpiračná fotografia.',
+        // Not shown on the photo; credited in the gallery like the hero.
         'credit' => 'Randy Fath / Unsplash',
         'source' => 'https://unsplash.com/photos/photo-of-gazebo-with-curtain-and-string-lights-csK5XPO87lI',
         'checklist' => ['Fotografia, rozmery a podklad', 'Účel, inšpirácie a rozpočet'],
         'download' => 'downloads/podklady-pre-drevenu-stavbu.txt',
-        'pending_title' => 'Kontaktné údaje pripravujeme',
-        'pending_description' => 'Telefón a email doplníme po potvrdení.',
+    ],
+
+    // The inquiry form appears only once INQUIRY_TO is set. In production a log or array mailer would swallow
+    // inquiries while visitors see a success message, so the form stays hidden until real sending is configured.
+    'inquiry' => [
+        'to' => env('APP_ENV') === 'production' && in_array(env('MAIL_MAILER', 'log'), ['log', 'array'], true) ? null : env('INQUIRY_TO'),
+        'heading' => 'Nezáväzný dopyt',
+        'description' => 'Stačí meno a kontakt. Ostatné pomôže s návrhom.',
+        'types' => ['altanok' => 'Altánok', 'pergola' => 'Pergola', 'pristresok' => 'Prístrešok', 'ine' => 'Iné'],
+        // Photos are downscaled in the browser; the limits cover the original files sent without JavaScript.
+        'max_photos' => 6,
+        'max_photo_kb' => 10240,
+        'max_total_kb' => 20480,
+        'consent' => 'Súhlasím so spracovaním osobných údajov z tohto dopytu na prípravu odpovede a cenovej ponuky.',
+        'sent_heading' => 'Ďakujeme.',
+        'sent_description' => 'Dopyt sme dostali. Ozveme sa vám čo najskôr na kontakt, ktorý ste uviedli.',
     ],
 ];
