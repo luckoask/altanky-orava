@@ -1,24 +1,34 @@
 /* DomOrava intro: 3D logo pred stránkou domorava.sk.
  *
- * Ten istý film ako na lcks.eu a LCKSplit, vo svetlých farbách webu: zelený
- * oblúk príde zdola, dubová strecha dopadne zhora a zacvakne, značka sa
- * posunie doľava a vedľa nej sa vypíše „DomOrava.sk“. Slonovinová plocha sa
- * potom rozdelí po oblúku medzi strechou a stĺpmi (strecha hore, oblúk dole)
- * a logo dosadne do hlavičky.
+ * Ten istý film ako na lcks.eu a LCKSplit, vo svetlých farbách webu, ale so
+ * skutočným modelom altánku z Blendera: zelený rám na kamenných pätkách príde
+ * zdola, drevená strecha dopadne zhora a dosadne, kríky vyrastú. Model sa
+ * dotočí čelom, pätky a kríky odídu a pás svetla ho zdola nahor premení na
+ * plochú značku. Značka sa posunie doľava a vedľa nej sa vypíše
+ * „DomOrava.sk“. Slonovinová plocha sa potom rozdelí po oblúku medzi
+ * strechou a stĺpmi (strecha hore, oblúk dole) a logo dosadne do hlavičky.
  *
- * Three.js sa sťahuje iba vtedy, keď intro naozaj beží (samostatný kúsok).
+ * Three.js a model sa sťahujú iba vtedy, keď intro naozaj beží (samostatný
+ * kúsok). Model vzniká skriptom docs/logo/export_portal_glb.py.
  *
  * Celá animácia je čistá funkcia času, frame(t): ?intro_t=3.4 zastaví na
  * snímke, ?intro_speed=0.3 spomalí. Kedy sa intro pustí, rozhoduje app.js.
  */
 import './domorava-intro.css';
 import { DOMORAVA_LOGO } from './logo-data.js';
+import PORTAL_URL from './domorava-portal.glb?url';
 
 function loadThree() {
     return import('./three-parts.js').then(function (m) {
-        return { THREE: m, RoomEnvironment: m.RoomEnvironment, SVGLoader: m.SVGLoader, toCreasedNormals: m.toCreasedNormals };
+        return { THREE: m, RoomEnvironment: m.RoomEnvironment, SVGLoader: m.SVGLoader, toCreasedNormals: m.toCreasedNormals, GLTFLoader: m.GLTFLoader };
     });
 }
+
+/* Model altánku: 1 m modelu = 222,2 px predlohy (docs/logo/pavilion-source.png),
+   stred x = 627 px, zem = 1183 px. Značka v intre je tá istá predloha
+   prekreslená v rámčeku 67–1189 × 74–1028 px (docs/logo/mark-geo.json), takže
+   model sedí presne na nej. */
+var PORTAL = { pxPerM: 2000 / 9, x0: 627, ground: 1183, markBox: [67, 74, 1189, 1028], joint: 3.58 };
 
 /* Spustí intro. Vráti Promise, ktorý sa splní vo chvíli, keď sa opona otvára
    (aj pri preskočení či chybe), aby stránka vedela pustiť vlastný úvod. */
@@ -53,6 +63,12 @@ export function startIntro(opts) {
             onReveal();
             return;
         }
+
+        // Model sa sťahuje hneď, súbežne s three.js.
+        var modelBytes = fetch(PORTAL_URL).then(function (r) {
+            if (!r.ok) throw new Error('model ' + r.status);
+            return r.arrayBuffer();
+        });
 
         /* ------------------------------------------------------------------ DOM */
 
@@ -113,16 +129,18 @@ export function startIntro(opts) {
         /* --------------------------------------------------------- časovanie */
 
         var T = {
-            in0: 0.30, in1: 2.05,          // príchod dielov
-            turn1: 3.05,                   // značka sa dotočí čelom k divákovi
-            slide0: 2.75, slide1: 3.75,    // posun doľava
-            caret0: 3.48,                  // kurzor sa objaví, keď ho značka odkryje
-            type0: 3.62, step: 0.115, ldur: 0.62,
-            sweep0: 4.75, sweep1: 5.85,    // pás svetla
-            crack0: 5.80, crack1: 6.15,    // prasknutie opony
-            split0: 6.10, split1: 7.20,    // rozostúpenie
-            fly0: 6.05, fly1: 7.10,        // let do hlavičky
-            land: 7.10, end: 7.55
+            in0: 0.30, in1: 2.15,          // príchod spodku a strechy
+            turn1: 3.00,                   // model sa dotočí čelom k divákovi
+            hide0: 2.85, hide1: 3.35,      // kríky a kamenné pätky odídu
+            scan0: 3.20, scan1: 3.95,      // pás svetla premení model na značku
+            slide0: 3.85, slide1: 4.85,    // posun doľava
+            caret0: 4.58,                  // kurzor sa objaví, keď ho značka odkryje
+            type0: 4.72, step: 0.115, ldur: 0.62,
+            sweep0: 5.85, sweep1: 6.95,    // pás svetla
+            crack0: 6.90, crack1: 7.25,    // prasknutie opony
+            split0: 7.20, split1: 8.30,    // rozostúpenie
+            fly0: 7.15, fly1: 8.20,        // let do hlavičky
+            land: 8.20, end: 8.65
         };
 
         /* ------------------------------------------------------------ pomocné */
@@ -165,6 +183,9 @@ export function startIntro(opts) {
         var E_LET   = bezier(0.2, 0.85, 0.25, 1);
         var E_SPLIT = bezier(0.76, 0, 0.24, 1);
         var E_FLY   = bezier(0.62, 0, 0.22, 1);
+
+        /* Mierny presah, keď kríky vyrastú. */
+        function backOut(x) { x = clamp01(x) - 1; return 1 + 2.2 * x * x * x + 1.2 * x * x; }
 
         /* Okamih dotyku: diely sú na 99 % cesty. */
         var tContact = (function () {
@@ -359,6 +380,9 @@ export function startIntro(opts) {
 
         var THREE, scene, camera, stage, markGroup, textGroup, pieces = [], letters = [];
         var caret, caretGlow, glow, streakThin, streakWide, dust;
+        var model, base, roof, frameNode, pedestals, plants = [], shadow, scanCore, scanGlow;
+        var modelClip, markClip, MK, MODEL_H, MODEL_LIFT, SCAN_LO, SCAN_HI;
+        var _v = null;
         var key, fill, rimL, rimR, sweep;
         var matLCK = [], colLight, colDark, chrome = [], envTex = null;
         var L = {};       // rozloženie závislé od veľkosti okna
@@ -508,13 +532,20 @@ export function startIntro(opts) {
             stage.add(markGroup, textGroup);
             scene.add(stage);
 
+            // Premena modelu na značku: vodorovná rovina ide zdola nahor, model
+            // ostáva nad ňou, plochá značka pod ňou.
+            renderer.localClippingEnabled = true;
+            _v = new THREE.Vector3();
+            modelClip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e3);
+            markClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e3);
+
             var mx0 = Infinity, mx1 = -Infinity;
             DATA.mark.forEach(function (p) {
                 var x = extrude(p.d, 22);
                 // Farby webu: lakovaný lesný oblúk #263E33, olejovaná dubová strecha #806447.
                 var mesh = new THREE.Mesh(x.geo, p.part === 'roof'
-                    ? material('#806447', { roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.2 })
-                    : material('#263E33', { roughness: 0.4, clearcoat: 0.8, clearcoatRoughness: 0.1 }));
+                    ? material('#806447', { roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.2, clippingPlanes: [markClip] })
+                    : material('#263E33', { roughness: 0.4, clearcoat: 0.8, clearcoatRoughness: 0.1, clippingPlanes: [markClip] }));
                 mesh.userData.home = new THREE.Vector3((x.c[0] - MARK_C[0]) * U, -(x.c[1] - MARK_C[1]) * U, 0);
                 // Strecha prilieta zhora, oblúk zdola.
                 mesh.userData.sign = p.part === 'roof' ? 1 : -1;
@@ -594,6 +625,72 @@ export function startIntro(opts) {
             streakWide.position.set(0, 0, 0.55);
             markGroup.add(streakThin, streakWide);
 
+            /* model altánku, v metroch, osadený presne na značku */
+            var ms = MARK_H / (PORTAL.markBox[3] - PORTAL.markBox[1]);   // px predlohy → lockup
+            MK = PORTAL.pxPerM * ms * U;                                  // meter modelu → svet
+            var MX = ((PORTAL.x0 - PORTAL.markBox[0]) * ms - MARK_C[0]) * U;
+            var MY = -((PORTAL.ground - PORTAL.markBox[1]) * ms - MARK_C[1]) * U;
+
+            var src = {};
+            lib.gltf.scene.children.slice().forEach(function (n) { src[n.name] = n; });
+            roof = src.Roof; frameNode = src.Frame; pedestals = src.Pedestals;
+            plants = [src.PlantsL, src.PlantsR];
+            if (!roof || !frameNode || !pedestals || !plants[0] || !plants[1]) throw new Error('model nemá očakávané diely');
+
+            var rb = new THREE.Box3().setFromObject(roof);
+            plants.forEach(function (p) {
+                var b = new THREE.Box3().setFromObject(p);
+                p.userData.half = (b.max.y - b.min.y) / 2;
+            });
+
+            model = new THREE.Group();
+            model.scale.setScalar(MK);
+            // Hĺbka sa centruje podľa strechy, čelo modelu je tak tesne pri čele značky.
+            model.position.set(MX, MY, -MK * (rb.min.z + rb.max.z) / 2);
+
+            // Spodok (rám s pätkami) letí ako jeden diel a otáča sa okolo svojho stredu.
+            base = new THREE.Group();
+            base.position.set(0, 1.9, frameNode.position.z);
+            [frameNode, pedestals].forEach(function (n) { n.position.sub(base.position); base.add(n); });
+            model.add(base, roof, plants[0], plants[1]);
+            [base, roof, pedestals].concat(plants).forEach(function (n) { n.userData.home = n.position.clone(); });
+
+            [roof, frameNode, pedestals].concat(plants).forEach(function (node) {
+                var mats = [];
+                node.traverse(function (o) {
+                    if (!o.isMesh) return;
+                    var m = o.material = o.material.clone();
+                    m.transparent = true;
+                    m.opacity = 0;
+                    m.clippingPlanes = [modelClip];
+                    // Čelo nesie maľbu predlohy aj s jej svetlom, nech ostane farebne verná.
+                    if (m.isMeshBasicMaterial) m.toneMapped = false;
+                    mats.push(m);
+                });
+                node.userData.mats = mats;
+            });
+
+            // Mäkký tieň pod pätkami, aby model nevisel vo vzduchu.
+            shadow = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: softTexture(128, [[0, 'rgba(58,46,32,.5)'], [0.45, 'rgba(58,46,32,.2)'], [1, 'rgba(58,46,32,0)']]),
+                transparent: true, opacity: 0, depthWrite: false
+            }));
+            shadow.position.set(0, 0.05, base.position.z);
+            shadow.scale.set(6.6, 0.8, 1);
+            model.add(shadow);
+            markGroup.add(model);
+
+            MODEL_H = MK * rb.max.y;
+            MODEL_LIFT = -(MY + MODEL_H / 2);          // celý model od zeme po hrebeň v strede
+            SCAN_LO = -MARK_H * U / 2 - 0.02;
+            SCAN_HI = MY + MK * rb.max.y + 0.03;
+            // záblesk dopadu je v medzere medzi strechou a rámom
+            streakThin.position.y = streakWide.position.y = MY + MK * PORTAL.joint;
+
+            scanCore = streak('#a8783f');
+            scanGlow = streak('#f3dfb6');
+            markGroup.add(scanCore, scanGlow);
+
             /* prach vo vzduchu */
             var N = 260, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
             for (var i = 0; i < N; i++) {
@@ -638,6 +735,8 @@ export function startIntro(opts) {
             var narrow = W < 700;
             L.scale = Math.min(L.visW * (narrow ? 0.8 : 0.6) / (LOCK_W * U), L.visH * 0.32 / (MARK_H * U), 1.2);
             L.solo = narrow ? 1.9 : 1.3;           // značka sama v strede je väčšia
+            // Model altánku je na začiatku ešte väčší, najviac na 60 % výšky okna.
+            L.hero = Math.max(L.solo, Math.min(narrow ? 2.6 : 1.95, L.visH * 0.6 / (MODEL_H * L.scale)));
             layoutCurtains();
             TGT = null;
         }
@@ -677,6 +776,12 @@ export function startIntro(opts) {
 
         var landed = false;
 
+        /* Priehľadnosť celého dielu modelu. */
+        function fade(node, a) {
+            node.userData.mats.forEach(function (m) { m.opacity = a; });
+            node.visible = a > 0.001;
+        }
+
         function frame(t) {
             var S = L.scale;
 
@@ -693,7 +798,9 @@ export function startIntro(opts) {
             // prelínanie s obrázkom v hlavičke nebolo vidieť.
             var flat = smooth(prog(t, T.fly0, T.fly1 - 0.15));
             scene.environmentIntensity = lerp(lerp(0.03, 0.42, lit), 0.1, flat);
-            scene.environmentRotation.set(0.1, lerp(-0.9, 0.55, E_INOUT(prog(t, 0, 7))), 0);
+            // Otáčanie prostredia ide so značkou: kým stojí čelom v strede, lak
+            // nesmie odrážať svetlý panel miestnosti, inak značka vybledne.
+            scene.environmentRotation.set(0.1, lerp(-0.9, 0.55, E_INOUT(prog(t, 1.1, 8.1))), 0);
             chrome.forEach(function (m) {
                 m.envMapIntensity = lerp(1.0 * lit, 0.55, flat);
                 m.envMapRotation.copy(scene.environmentRotation);
@@ -705,30 +812,45 @@ export function startIntro(opts) {
             rimL.intensity = (7 + 45 * pc) * lit * S * S * (1 - flat);
             rimR.intensity = (5 + 30 * pc) * lit * S * S * (1 - flat);
 
-            /* -------- diely značky */
+            /* -------- model: spodok zdola, strecha zhora, kríky vyrastú */
+            var pinB = prog(t, T.in0 - 0.1, T.in1 - 0.45);
+            var kB = 1 - E_IN(pinB), bh = base.userData.home;
+            base.position.set(bh.x - 0.3 * kB / MK, bh.y - 4.6 * kB / MK, bh.z - 1.4 * kB / MK);
+            base.rotation.set(1.1 * kB, -0.5 * kB, -0.15 * kB);
+
+            var pinR = prog(t, T.in0 + 0.35, T.in1);
+            var kR = 1 - E_IN(pinR), rh = roof.userData.home;
+            // Po dotyku strecha o pár centimetrov dosadne a vráti sa.
+            var dc = t - tContact;
+            var settle = dc > 0 ? Math.exp(-dc / 0.1) * Math.sin(dc * 30) : 0;
+            roof.position.set(rh.x + 0.2 * kR / MK, rh.y + 4.4 * kR / MK - 0.045 * settle, rh.z + 0.9 * kR / MK);
+            roof.rotation.set(-0.55 * kR, 0.22 * kR, -0.14 * kR);
+
+            var hide = smooth(prog(t, T.hide0, T.hide1));
+            var aB = smooth(prog(pinB, 0.02, 0.32));
+            fade(frameNode, aB);
+            fade(roof, smooth(prog(pinR, 0.02, 0.32)));
+            fade(pedestals, aB * (1 - hide));
+            pedestals.position.y = pedestals.userData.home.y - 0.45 * hide;
+            plants.forEach(function (p, i) {
+                var up = backOut(prog(t, tContact - 0.3 + i * 0.09, tContact + 0.45 + i * 0.09));
+                var s = Math.max(0.001, up * (1 - smooth(prog(t, T.hide0 - 0.05 + i * 0.05, T.hide1 - 0.12 + i * 0.05))));
+                p.scale.setScalar(s);
+                p.position.y = p.userData.home.y - (1 - s) * p.userData.half;
+                fade(p, s > 0.002 ? 1 : 0);
+            });
+            shadow.material.opacity = 0.55 * aB * (1 - hide);
+            shadow.visible = shadow.material.opacity > 0.002;
+            model.visible = t < T.scan1;
+
+            /* plochá značka sa objaví až pod pásom svetla */
+            var sc = prog(t, T.scan0, T.scan1);
+            var sOn = Math.sin(Math.PI * sc);
             pieces.forEach(function (m) {
-                var sg = m.userData.sign, h = m.userData.home;
-                var pin, e, k;
-                if (VARIANT === 'dielik') {
-                    // Najprv oblúk zdola, strecha dopadne zhora až po ňom a
-                    // zacvakne (záblesk je na jej dopade).
-                    pin = sg < 0 ? prog(t, T.in0 - 0.1, T.in1 - 0.45) : prog(t, T.in0 + 0.35, T.in1);
-                    e = E_IN(pin); k = 1 - e;
-                    if (sg < 0) {
-                        m.position.set(h.x - 0.3 * k, h.y - 4.6 * k, h.z - 1.4 * k);
-                        m.rotation.set(1.1 * k, -0.5 * k, -0.15 * k);
-                    } else {
-                        m.position.set(h.x + 0.2 * k, h.y + 4.4 * k, h.z + 0.9 * k);
-                        m.rotation.set(-0.55 * k, 0.22 * k, -0.14 * k);
-                    }
-                } else {
-                    pin = prog(t, T.in0, T.in1);
-                    e = E_IN(pin); k = 1 - e;
-                    m.position.set(h.x + sg * 0.35 * k, h.y + sg * 5.2 * k, h.z - 1.6 * k);
-                    m.rotation.set(-sg * 1.25 * k, sg * 0.55 * k, -0.18 * k);
-                }
-                m.material.opacity = smooth(prog(pin, 0.02, 0.32));
-                m.visible = m.material.opacity > 0.001;
+                m.position.copy(m.userData.home);
+                m.rotation.set(0, 0, 0);
+                m.material.opacity = 1;
+                m.visible = sc > 0;
             });
 
             /* -------- značka: dotočenie, záblesk, posun doľava */
@@ -738,15 +860,16 @@ export function startIntro(opts) {
             var click = 1 + 0.022 * pulse(t, tContact + 0.04, 0.05, 0.22);
             var mh = markGroup.userData.home;
 
-            markGroup.position.set(mh.x * sl, 0, 0);
+            // Kým stojí celý model aj s pätkami, je v strede on, potom značka.
+            markGroup.position.set(mh.x * sl, MODEL_LIFT * (1 - smooth(prog(t, T.hide0, T.scan0 + 0.25))), 0);
             markGroup.rotation.set(lerp(0.2, 0, turn), lerp(-0.62, 0, turn) + bump, lerp(0.05, 0, turn));
-            markGroup.scale.setScalar(lerp(L.solo, 1, sl) * click);
+            markGroup.scale.setScalar(lerp(lerp(L.hero, L.solo, smooth(prog(t, T.hide0, T.scan1))), 1, sl) * click);
             textGroup.position.copy(textGroup.userData.home);
             textGroup.rotation.set(0, 0, 0);
             textGroup.scale.setScalar(1);
 
             var fxOut = 1 - smooth(prog(t, T.fly0 - 0.15, T.fly0 + 0.35));
-            glow.material.opacity = (0.55 * smooth(prog(t, 1.0, 2.3)) + 0.9 * pc) * fxOut;
+            glow.material.opacity = (0.55 * smooth(prog(t, 1.0, 2.3)) + 0.9 * pc + 0.45 * sOn) * fxOut;
             glow.scale.setScalar(7.5 * (1 + 0.25 * pc));
 
             var pst = pulse(t, tContact, 0.04, 0.42);
@@ -802,6 +925,29 @@ export function startIntro(opts) {
             var breathe = smooth(prog(t, T.slide1, T.fly0));
             stage.rotation.set(0, Math.sin(t * 0.7) * 0.025 * breathe * (1 - smooth(prog(t, T.fly0 - 0.2, T.fly0 + 0.2))), 0);
 
+            /* -------- pás svetla: model sa zdola nahor mení na značku */
+            var band = lerp(SCAN_LO, SCAN_HI, E_INOUT(sc));
+            if (sc <= 0) {
+                modelClip.constant = 1e3;
+                markClip.constant = -1e3;
+            } else if (sc >= 1) {
+                modelClip.constant = -1e3;
+                markClip.constant = 1e3;
+            } else {
+                // Roviny orezania sú vo svete, pás je v súradniciach značky.
+                markGroup.updateWorldMatrix(true, false);
+                var wy = _v.set(0, band, 0).applyMatrix4(markGroup.matrixWorld).y;
+                modelClip.constant = -wy;
+                markClip.constant = wy;
+            }
+            scanCore.position.set(0, band, 0.5);
+            scanGlow.position.set(0, band, 0.45);
+            scanCore.scale.set(3.4, 0.05, 1);
+            scanGlow.scale.set(3.9, 0.7, 1);
+            scanCore.material.opacity = Math.sqrt(sOn);
+            scanGlow.material.opacity = 0.75 * sOn;
+            scanCore.visible = scanGlow.visible = sOn > 0.003;
+
             /* -------- let do hlavičky */
             if (t >= T.fly0 - 0.05 && !TGT) TGT = measureTargets();
             var fl = E_FLY(prog(t, T.fly0, T.fly1));
@@ -852,7 +998,21 @@ export function startIntro(opts) {
 
         /* ------------------------------------------------------------ chod */
 
-        function load() { return loadThree(); }
+        function load() {
+            return Promise.all([loadThree(), modelBytes]).then(function (res) {
+                var lib = res[0];
+                return new Promise(function (resolve, reject) {
+                    var loader = new lib.GLTFLoader();
+                    // Textúry z GLB idú cez <img> s blob: adresou. Predvolený
+                    // ImageBitmapLoader ich číta cez fetch, ten CSP (connect-src) zakazuje.
+                    loader.register(function (parser) {
+                        parser.textureLoader = new lib.THREE.TextureLoader(parser.options.manager);
+                        return { name: 'domorava_img_textures' };
+                    });
+                    loader.parse(res[1], '', function (gltf) { lib.gltf = gltf; resolve(lib); }, reject);
+                });
+            });
+        }
 
         function webglOk() {
             try {

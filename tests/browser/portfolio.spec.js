@@ -4,6 +4,10 @@ import { execFileSync } from 'node:child_process';
 
 let errors;
 test.beforeEach(async ({ page }) => {
+    // A recent visit keeps the 3D intro away; its own test asks for it with ?intro=1.
+    await page.addInitScript(() => {
+        try { window.localStorage.setItem('domorava-intro', String(Date.now())); } catch { /* storage blocked */ }
+    });
     errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
@@ -510,6 +514,21 @@ test('project brief downloads a real UTF-8 text file', async ({ page }) => {
     expect(download.suggestedFilename()).toBe('podklady-pre-drevenu-stavbu.txt');
     expect(await download.failure()).toBeNull();
     expect(await readFile(await download.path(), 'utf8')).toContain('PODKLADY PRE DREVENÚ STAVBU');
+});
+
+test('3D intro loads the pavilion model, plays through and leaves the logo in the header', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const model = page.waitForResponse((response) => /domorava-portal-[\w-]+\.glb$/.test(response.url()));
+    await page.goto('/?intro=1');
+    expect((await model).status()).toBe(200);
+    const webgl = await page.evaluate(() => Boolean(document.createElement('canvas').getContext('webgl2')));
+    if (webgl) await expect(page.locator('#si canvas')).toHaveCount(1, { timeout: 30000 });
+    await page.waitForFunction(() => window.DOMORAVA_INTRO_DONE === true, null, { timeout: 60000 });
+    await expect(page.locator('#si')).toHaveCount(0);
+    await expect(page.locator('html')).not.toHaveClass(/si-on|intro-hold/);
+    await expect(page.locator('.brand-mark').first()).toBeVisible();
 });
 
 test('reduced motion skips GSAP and disables smooth scrolling', async ({ page }) => {
